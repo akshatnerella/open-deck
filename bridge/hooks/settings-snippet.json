@@ -1,0 +1,64 @@
+{
+  "_readme": [
+    "Merge the 'hooks' block below into ~/.claude/settings.json (user-level, so",
+    "every project reports to the deck) or .claude/settings.json for one project.",
+    "",
+    "Replace HOOK_PATH with the absolute path to opendeck-hook.sh, e.g.",
+    "  /Users/you/Documents/open-deck/bridge/hooks/opendeck-hook.sh",
+    "",
+    "Every hook is fire-and-forget with a 1s timeout and always exits 0, so a",
+    "stopped bridge daemon can never block or fail an agent turn."
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "HOOK_PATH SessionStart" }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "HOOK_PATH UserPromptSubmit" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "HOOK_PATH PreToolUse" }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          { "type": "command", "command": "HOOK_PATH Notification" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "HOOK_PATH Stop" }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "HOOK_PATH SubagentStop" }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          { "type": "command", "command": "HOOK_PATH SessionEnd" }
+        ]
+      }
+    ]
+  }
+}

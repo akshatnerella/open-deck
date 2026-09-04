@@ -1,0 +1,38 @@
+{
+  "name": "Grok CLI",
+  "status_source": "tmux",
+  "_comment": [
+    "Same fallback path as OpenCode: no assumed hook system, so status comes",
+    "from tmux pane scraping. Confirm these patterns against the Grok CLI",
+    "build you actually run - they are a starting point, not verified."
+  ],
+  "tmux_scrape": {
+    "poll_seconds": 1.0,
+    "blocked_patterns": ["\\(y/n\\)", "Allow\\?", "Approve", "\\[y/N\\]"],
+    "idle_patterns": ["^>\\s*$"]
+  },
+  "actions": {
+    "KEY_TERM": {
+      "tap":  { "type": "focus" },
+      "hold": { "type": "shell", "command": "tmux new-window -n agent{slot} 'grok'" }
+    },
+    "KEY_ENTER": {
+      "tap":  { "type": "keystroke", "keys": ["return"] },
+      "hold": { "type": "none" }
+    },
+    "KEY_MIC": {
+      "tap":  { "type": "keystroke", "keys": ["f5"] },
+      "hold": { "type": "keystroke", "keys": ["f5"] }
+    },
+    "KEY_CANCEL": {
+      "tap":  { "type": "keystroke", "keys": ["escape"] },
+      "hold": { "type": "keystroke", "keys": ["ctrl", "c"] }
+    }
+  },
+  "palette": [
+    "/clear",
+    "run the tests",
+    "review this diff",
+    "explain this error"
+  ]
+}

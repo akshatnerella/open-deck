@@ -1,0 +1,40 @@
+{
+  "name": "OpenCode",
+  "status_source": "tmux",
+  "_comment": [
+    "No first-class hook system assumed, so status comes from tmux pane",
+    "scraping (see docs/product-spec.md section 5 - this is the brittle path",
+    "and where per-harness maintenance lands when the TUI changes).",
+    "Verify the prompt patterns below against your actual OpenCode version."
+  ],
+  "tmux_scrape": {
+    "poll_seconds": 1.0,
+    "blocked_patterns": ["\\(y/n\\)", "Allow\\?", "Approve", "\\[y/N\\]"],
+    "idle_patterns": ["^>\\s*$", "Ready"]
+  },
+  "actions": {
+    "KEY_TERM": {
+      "tap":  { "type": "focus" },
+      "hold": { "type": "shell", "command": "tmux new-window -n agent{slot} 'opencode'" }
+    },
+    "KEY_ENTER": {
+      "tap":  { "type": "keystroke", "keys": ["return"] },
+      "hold": { "type": "none" }
+    },
+    "KEY_MIC": {
+      "tap":  { "type": "keystroke", "keys": ["f5"] },
+      "hold": { "type": "keystroke", "keys": ["f5"] }
+    },
+    "KEY_CANCEL": {
+      "tap":  { "type": "keystroke", "keys": ["escape"] },
+      "hold": { "type": "keystroke", "keys": ["ctrl", "c"] }
+    }
+  },
+  "palette": [
+    "/new",
+    "/clear",
+    "run the tests",
+    "review this diff",
+    "explain this error"
+  ]
+}
