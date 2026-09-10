@@ -179,3 +179,28 @@ class TestPaneListGlance(unittest.TestCase):
         ctrl, transport = self._controller()
         ctrl._announce("interrupt", {"slot": 0})
         self.assertIn("TOAST FOX interrupted", transport.sent)
+
+    def test_summon_shows_the_summoned_session_not_the_attached_one(self):
+        from fakes import pane
+
+        tmux = FakeTmux(
+            sessions=["webapp", "api"],
+            panes={
+                "webapp": [pane(index=0, command="claude", window_active=True, pane_active=True)],
+                "api": [pane(index=0, command="pytest", window_active=True, pane_active=True)],
+            },
+            client=False,
+        )
+        transport = FakeTransport()
+        ctrl = Controller(Config(), transport, tmux, FakeTerminal())
+        ctrl.slots.refresh()
+        ctrl._announce("summon", {"slot": 1})
+        payload = next(m for m in transport.sent if m.startswith("LIST "))
+        self.assertIn("api", payload)
+        self.assertIn("pytest", payload)
+        self.assertNotIn("claude", payload)
+
+    def test_summon_of_an_empty_slot_pushes_nothing(self):
+        ctrl, transport = self._controller()
+        ctrl._announce("summon", {"slot": 3})
+        self.assertEqual([m for m in transport.sent if m.startswith("LIST ")], [])

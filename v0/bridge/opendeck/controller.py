@@ -67,7 +67,9 @@ class Controller:
     def _announce(self, action: str, args: dict) -> None:
         match action:
             case "summon":
-                self._push_pane_list()
+                session = self._slots.session_for(args.get("slot", 0))
+                if session:
+                    self._push_pane_list(session)
             case "interrupt":
                 slot = args.get("slot", 0)
                 if self._slots.session_for(slot):
@@ -88,8 +90,8 @@ class Controller:
             name = self._slots.label(slot) if slot is not None else snapshot.attention_session
             self._face.toast(f"{name} wants you")
 
-    def _push_pane_list(self) -> None:
-        session = self._slots.current_session()
+    def _push_pane_list(self, session: str | None = None) -> None:
+        session = session or self._slots.current_session()
         if session is None:
             return
         slot = self._slots.slot_of(session)
