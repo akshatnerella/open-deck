@@ -133,6 +133,10 @@ Things that cost real debugging time, so you don't repeat them:
 - **`pinMode()` is expensive on ESP32.** Toggling rows between `OUTPUT` and
   `INPUT` every scan was slow enough to make the encoder feel laggy;
   `OUTPUT_OPEN_DRAIN` set once gives the same protection for free.
+- **Scope input debouncing to the keys that need it.** A double-tap window
+  held *every* tap for 350ms, though only one key had a double binding - so
+  seven keys paid for a feature they never used. Latency you add deliberately
+  is still latency.
 - **A full OLED flush blocks for 29.5ms.** Sharing a thread with input means
   the encoder is never sampled during a flush, and detents get *dropped* —
   which reads as inconsistency, not lag. Rendering is pinned to core 0 and

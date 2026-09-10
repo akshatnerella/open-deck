@@ -20,7 +20,8 @@ def hold(key=KEY):
 
 class TestGestureRecognizer(unittest.TestCase):
     def setUp(self):
-        self.r = GestureRecognizer(double_tap_window=0.35)
+        # KEY_TERM is the only key with a double binding in the defaults.
+        self.r = GestureRecognizer(0.35, frozenset({KEY}))
 
     def test_single_tap_emits_only_after_the_window_closes(self):
         self.assertEqual(self.r.feed(down(), 0.0), [])
@@ -66,20 +67,25 @@ class TestGestureRecognizer(unittest.TestCase):
         self.r.feed(hold(), 0.5)
         self.assertEqual(self.r.tick(2.0), [])
 
-    def test_keys_are_tracked_independently(self):
+    def test_keys_without_a_double_binding_fire_immediately(self):
+        # Waiting out the double-tap window on a key that has no double
+        # binding is pure added latency.
         other = "KEY_MIC"
-        self.r.feed(down(), 0.0)
-        self.r.feed(up(), 0.01)
-        self.r.feed(down(other), 0.02)
-        self.r.feed(up(other), 0.03)
-        emitted = dict(self.r.tick(0.5))
-        self.assertEqual(emitted, {KEY: Gesture.TAP, other: Gesture.TAP})
+        self.r.feed(down(other), 0.0)
+        self.assertEqual(self.r.feed(up(other), 0.05), [(other, Gesture.TAP)])
+        self.assertEqual(self.r.tick(1.0), [])
+
+    def test_immediate_keys_still_honour_hold(self):
+        other = "KEY_AGENT1"
+        self.r.feed(down(other), 0.0)
+        self.assertEqual(self.r.feed(hold(other), 0.4), [(other, Gesture.HOLD)])
+        self.assertEqual(self.r.feed(up(other), 0.9), [])
 
     def test_double_tap_needs_the_same_key(self):
         self.r.feed(down(), 0.0)
         self.r.feed(up(), 0.05)
         self.r.feed(down("KEY_MIC"), 0.1)
-        self.assertEqual(self.r.feed(up("KEY_MIC"), 0.15), [])
+        self.assertEqual(self.r.feed(up("KEY_MIC"), 0.15), [("KEY_MIC", Gesture.TAP)])
 
     def test_next_deadline_reports_pending_work(self):
         self.assertIsNone(self.r.next_deadline)

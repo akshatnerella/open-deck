@@ -36,7 +36,12 @@ class Controller:
         self._transport = transport
         self._slots = SlotTable(tmux, config.sessions)
         self._context = Context(tmux=tmux, terminal=terminal, slots=self._slots, config=config)
-        self._gestures = GestureRecognizer(config.double_tap_window)
+        self._gestures = GestureRecognizer(
+            config.double_tap_window,
+            frozenset(
+                key for key, gestures in config.bindings.items() if "double" in gestures
+            ),
+        )
         self._presence = PresenceMonitor(tmux, self._slots)
         self._face = Face(transport)
         self._running = False

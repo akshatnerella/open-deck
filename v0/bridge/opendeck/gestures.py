@@ -16,6 +16,10 @@ DEFAULT_DOUBLE_TAP_WINDOW = 0.35
 @dataclass
 class GestureRecognizer:
     double_tap_window: float = DEFAULT_DOUBLE_TAP_WINDOW
+    #: Only these keys wait out the double-tap window. Every other key emits
+    #: its tap on release - a key with no double binding has nothing to wait
+    #: for, and making it wait adds `double_tap_window` of latency for free.
+    double_tap_keys: frozenset[str] = frozenset()
     _held: set[str] = field(default_factory=set, init=False)
     _pending: dict[str, float] = field(default_factory=dict, init=False)
 
@@ -35,6 +39,8 @@ class GestureRecognizer:
             if key in self._held:
                 self._held.discard(key)
                 return []
+            if key not in self.double_tap_keys:
+                return [(key, Gesture.TAP)]
             deadline = self._pending.pop(key, None)
             if deadline is not None and now < deadline:
                 return [(key, Gesture.DOUBLE_TAP)]

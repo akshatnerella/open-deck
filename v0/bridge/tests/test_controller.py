@@ -121,3 +121,19 @@ class TestAttentionAnnounce(unittest.TestCase):
         ctrl, transport = self._controller()
         ctrl._announce_presence(Snapshot(State.ATTENTION, attention_session="ghost"))
         self.assertIn("TOAST ghost wants you", transport.sent)
+
+
+class TestGestureScoping(unittest.TestCase):
+    def test_only_keys_with_a_double_binding_wait(self):
+        ctrl, _, _ = controller()
+        keys = ctrl._gestures.double_tap_keys
+        self.assertEqual(keys, frozenset({"KEY_TERM"}))
+
+    def test_agent_key_taps_are_not_delayed(self):
+        from opendeck.events import Edge, KeyEvent
+        from opendeck.events import Gesture
+
+        ctrl, _, _ = controller()
+        ctrl._gestures.feed(KeyEvent("KEY_AGENT1", Edge.DOWN), 0.0)
+        emitted = ctrl._gestures.feed(KeyEvent("KEY_AGENT1", Edge.UP), 0.05)
+        self.assertEqual(emitted, [("KEY_AGENT1", Gesture.TAP)])

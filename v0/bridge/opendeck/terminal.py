@@ -68,9 +68,20 @@ class Terminal:
         return self.app is not None and shutil.which("osascript") is not None
 
     def focus(self) -> bool:
+        """Raise the terminal without waiting for it.
+
+        `osascript activate` takes ~67ms and nothing downstream depends on its
+        result, so blocking the event loop on it just adds latency to every
+        key press. The app's existence is validated once at startup.
+        """
         if self.app is None:
             return False
-        return _osascript(f'tell application "{self.app.name}" to activate')
+        subprocess.Popen(
+            ["osascript", "-e", f'tell application "{self.app.name}" to activate'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
 
     def launch_attached(self, session: str) -> bool:
         if self.app is None:
