@@ -94,14 +94,14 @@ class TestAttentionAnnounce(unittest.TestCase):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        ctrl._announce_presence(Snapshot(State.ATTENTION, attention_session="api"))
+        ctrl._announce_presence(Snapshot(State.ALERT, attention_session="api"))
         self.assertIn("TOAST OWL wants you", transport.sent)
 
     def test_toasts_only_on_the_transition(self):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        snap = Snapshot(State.ATTENTION, attention_session="api")
+        snap = Snapshot(State.ALERT, attention_session="api")
         ctrl._announce_presence(snap)
         transport.sent.clear()
         ctrl._announce_presence(snap)
@@ -111,15 +111,15 @@ class TestAttentionAnnounce(unittest.TestCase):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        ctrl._announce_presence(Snapshot(State.WORKING))
+        ctrl._announce_presence(Snapshot(State.BUSY))
         self.assertEqual([m for m in transport.sent if m.startswith("TOAST")], [])
-        self.assertIn("STATE working", transport.sent)
+        self.assertIn("STATE busy", transport.sent)
 
     def test_unmapped_session_falls_back_to_its_name(self):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        ctrl._announce_presence(Snapshot(State.ATTENTION, attention_session="ghost"))
+        ctrl._announce_presence(Snapshot(State.ALERT, attention_session="ghost"))
         self.assertIn("TOAST ghost wants you", transport.sent)
 
 

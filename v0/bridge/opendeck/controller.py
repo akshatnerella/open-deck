@@ -86,7 +86,7 @@ class Controller:
             return
         # Naming the session is the whole point of the alert - "something wants
         # you" is not actionable, "OWL wants you" is.
-        if snapshot.state is State.ATTENTION and snapshot.attention_session:
+        if snapshot.state is State.ALERT and snapshot.attention_session:
             slot = self._slots.slot_of(snapshot.attention_session)
             name = self._slots.label(slot) if slot is not None else snapshot.attention_session
             self._face.toast(f"{name} wants you")
@@ -97,7 +97,6 @@ class Controller:
     def _handle(self, event: object, now: float) -> None:
         match event:
             case KeyEvent():
-                self._presence.note_input(now)
                 for key, gesture in self._gestures.feed(event, now):
                     self.dispatch(key, gesture)
             case Connected(port=port):
@@ -148,7 +147,6 @@ class Controller:
                 self._handle(event, now)
 
             if delta:
-                self._presence.note_input(now)
                 log.debug("encoder %+d", delta)
                 self.handle_encoder(delta)
 
