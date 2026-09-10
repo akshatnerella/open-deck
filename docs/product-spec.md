@@ -1,299 +1,112 @@
-# Open Deck — Product Spec v0.2
+# Open Deck — Design Notes
 
-A USB HID-style control surface for terminal AI coding agents
-(Claude Code first; Grok CLI, OpenCode, Codex and others via profiles).
-
-Hardware: XIAO ESP32S3 · 128×64 mono OLED (SH1106) · rotary encoder
-(no push-switch) · 8 mechanical keys in a 2×4 matrix · USB-tethered.
+Why the device is shaped the way it is. For protocol details see
+[protocol-spec.md](protocol-spec.md); for building one see
+[../v0/README.md](../v0/README.md).
 
 ---
 
-## 1. The thesis
+## The idea
 
-The hard part of running several coding agents at once is **not typing**.
-It's **attention**:
+Running several coding agents at once, the bottleneck isn't typing — it's
+**context switching**. Which project was that in? Which pane is the agent in?
+Where did I leave the tests running?
 
-- An agent hits a permission prompt and blocks. You don't notice for 6 minutes.
-- Another finishes and sits idle awaiting review. You don't notice at all.
-- A third is confidently doing the wrong thing and you'd stop it — if you were looking.
-- You context-switch between panes just to answer "who needs me?"
+The deck maps that onto hardware you can hit without looking:
 
-A screen you already have can show this, but it competes with everything
-else for the same visual space and the same window focus. A small,
-dedicated, always-on display doesn't. **That's the entire justification
-for this device existing.**
+- **Four animal keys → four tmux sessions.** Coarse: which project.
+- **Encoder → panes within that session.** Fine: which terminal.
 
-So the design goal is not "buttons that type things." It is:
-
-> **Answer "which agent needs me, and what does it want?" without switching windows —
-> and let me respond in one press.**
-
-Everything below follows from that.
+The key insight, and the one that came from the user rather than the design:
+**tmux sessions are a real thing you already have.** An earlier version
+invented "agent sessions" as an abstraction and asked you to adopt it. Mapping
+to tmux instead means the deck fits an existing workflow rather than replacing
+one, and it makes the hardware's job legible — a preset button and a tuning
+dial, like a radio.
 
 ---
 
-## 2. What the display is for
+## Why tmux does most of the work
 
-The OLED is 128×64 mono. At the default 6×8 font that's **21 characters ×
-8 lines**. That's the real budget — every layout below is designed against it,
-not against a wish.
+tmux already tracks, per window, whether there's been **activity** or a
+**bell** since you last looked. That's precisely the "something happened where
+you aren't watching" signal the device needs — available from one subprocess
+call, with no agent integration, no hooks, and no screen scraping.
 
-### Mode A — Dashboard (default, idle-to-working state)
-
-The home screen. One row per agent slot.
-
-```
-┌─────────────────────┐
-│OPEN DECK      14:32 │
-│                     │
-│▸1 FOX  ●RUN   2m14s │
-│ 2 OWL  ⏸NEED APPROVE│
-│ 3 CAT  ✓DONE  ctx81%│
-│ 4 PNDA ·idle        │
-└─────────────────────┘
-```
-
-- `▸` marks the encoder's current selection (what ENTER will act on).
-- Status glyphs: `●` running · `⏸` blocked/needs you · `✓` done, awaiting review ·
-  `·` idle · `✕` errored/crashed.
-- Elapsed time for running agents (how long has this been going?).
-- `ctx%` when context is getting full — **the early warning that an agent is
-  about to compact and start forgetting things.** This is one of the most
-  genuinely useful numbers to surface and it's invisible in normal use until
-  it bites you.
-
-Any agent entering the blocked state makes the whole display **invert-flash
-twice**, then settle with that row highlighted. That's the attention signal.
-
-### Mode B — Approval (auto-raised, the killer feature)
-
-When any agent blocks on a permission prompt, the deck raises this
-automatically — you don't navigate to it:
-
-```
-┌─────────────────────┐
-│⏸ APPROVE? · agent2  │
-│                     │
-│Bash                 │
-│  rm -rf ./build     │
-│  && npm run clean   │
-│                     │
-│ENT=yes  X=no  ⟳=more│
-└─────────────────────┘
-```
-
-- ENTER approves, X denies. Both map to the harness's *own* native keys
-  (see §4) — no clever translation needed.
-- The encoder scrolls the command text when it's longer than fits.
-- **Multiple pending approvals queue**; the header shows `⏸ 2 of 3` and the
-  encoder moves between them.
-
-### Mode C — Focus (single agent detail)
-
-Hold an agent key, or ENTER on a dashboard row, to drill in: last tool call,
-current file being edited, elapsed, context%, token spend. For "what is this
-thing actually doing right now" without switching windows.
-
-### Mode D — Palette (TERM key)
-
-Encoder-scrollable list of saved prompts and slash commands
-(`/compact`, `/clear`, `/tasks`, plus your own canned prompts —
-"write tests for this", "review this diff", "explain this error").
-ENTER sends it to the focused agent. This is the one place the device acts
-like a traditional macro pad, and it's deliberately *not* the main mode.
-
-### Mode E — Ambient / sleep
-
-After N minutes with nothing running: dim, then show a minimal clock +
-today's totals. **OLEDs burn in** — a static dashboard left lit for months
-will ghost. Dim aggressively, shift pixels a little, and blank on true idle.
+An earlier design got this from Claude Code's hook system. That worked, but it
+was Claude-Code-specific, needed `settings.json` edits, and broke entirely
+under `--dangerously-skip-permissions`. tmux gives the same signal for every
+harness for free.
 
 ---
 
-## 3. Key map
+## Pixie
 
-Eight keys, two layers (tap vs. hold ≈400ms). Hold is how we get 16 actions
-out of 8 keys — necessary because **the encoder has no push-switch**, so it
-can't be a confirm button.
+The face is [Pixie](https://github.com/akshatnerella/pixie), drawn
+procedurally by RoboEyes — the same character, ported from her 320×240 colour
+panel to the deck's 128×64 mono OLED. Her expression is derived from tmux
+state, evaluated in strict priority order so two simultaneously-true signals
+can't make the face flap:
 
-Physical layout (verified on hardware):
-
-```
- TERM   MIC    FOX    PANDA
- ENTER   X     CAT    OWL
-```
-
-| Key | Tap | Hold |
+| Priority | State | Trigger |
 |---|---|---|
-| **TERM** | Focus the selected agent's terminal window/pane | Start a new agent in a free slot |
-| **ENTER** ✓ | Enter / approve the pending request | **Approve + "don't ask again"** (deliberately harder to reach — see §6) |
-| **MIC** 🎙 | Toggle dictation (push-to-talk) | Hold-to-talk while held |
-| **X** ✗ | Esc — deny the prompt, or interrupt the running agent | Esc Esc — rewind/edit previous message |
-| **FOX / OWL / CAT / PANDA** | Select + focus that agent slot | **Interrupt that specific agent** without switching to it |
+| 1 | `attention` | activity/bell in a session you are **not** in |
+| 2 | `done` | an agent that was running here stopped |
+| 3 | `working` | something is running in the current session |
+| 4 | `active` | you touched the deck (4s linger) |
+| 5 | `idle` | shells only |
+| 6 | `asleep` | 5 min untouched, or no sessions |
 
-Two things worth calling out because they're the design working *with* the
-harness instead of against it:
+`done` is explicitly non-latching, or she'd stay grinning forever.
 
-**ENTER and X are contextually correct in every mode, for free.** In Claude
-Code, Enter submits *and* accepts a permission prompt; Esc denies a prompt
-*and* interrupts a running agent. So one physical key = one semantic action
-in every state, with no mode-tracking logic in the bridge. That's not a
-coincidence to rely on blindly in other harnesses, but where it holds it
-makes the mapping trivial.
-
-**Hold-to-interrupt-a-specific-agent** is the sleeper feature. You see agent
-3 going off the rails on the dashboard, you hold the CAT key, it stops.
-You never left the window you were in.
+Notifications are **toasts**: one line, 1.8s, replacing the face. Subtle by
+construction — they interrupt briefly rather than becoming permanent chrome.
 
 ---
 
-## 4. Encoder — context-sensitive dial
+## Things learned the hard way
 
-One dial, meaning determined by the active mode. No push-switch, so it only
-ever scrolls; ENTER commits.
+Each of these cost real debugging time and is now pinned by a test or a
+comment in the code.
 
-| Mode | Encoder does |
-|---|---|
-| Dashboard | Move selection between agent slots |
-| Approval | Scroll long command text / move between queued approvals |
-| Palette | Scroll the command list |
-| Focus | Scroll that agent's recent activity |
-| Hold TERM + turn | Cycle permission mode (normal → auto-accept → plan) |
+**The display was eating the encoder.** A full SH1106 flush blocks 29.5ms;
+RoboEyes wants a frame every 20ms. On one thread the encoder was never sampled
+during a flush, so detents weren't delayed — they were dropped. Fixed by
+pinning rendering to the second core. This looked like host-side lag and
+wasn't; measuring the host first (12ms/poll, 7ms/detent) ruled it out before
+any code changed.
 
----
+**Claude Code reports its version as the process name.** `pane_current_command`
+returns `2.1.261`, not `claude`. An allowlist of binary names silently misses
+every running agent. Matched by shape as well as name.
 
-## 5. Where the status actually comes from
+**Column order was mirrored.** Physical left-to-right is `D7 D8 D9 D10`, the
+reverse of the wiring diagram. Determined by pressing keys in sequence and
+reading back the reported names. Guessed twice, wrong twice; measuring took one
+round.
 
-This is the part that makes or breaks the whole concept, so it gets a real
-answer rather than hand-waving.
+**Ghostty needs `-e` with separate argv entries.** `--args -e "tmux attach -t x"`
+opens a window that runs nothing. And it uses non-native fullscreen, so
+`AXFullScreen` reads `false` even when fullscreen — a "toggle unless already
+fullscreen" check exits fullscreen every time. Fullscreen is set at launch
+only.
 
-### Claude Code: hooks (the correct mechanism)
-
-Claude Code has a hooks system that fires on lifecycle events, configured in
-`settings.json`. The relevant ones:
-
-| Hook | Tells us |
-|---|---|
-| `SessionStart` | Agent slot became active |
-| `UserPromptSubmit` | Agent went from idle → working |
-| `PreToolUse` | What it's about to do (feeds Focus mode) |
-| `Notification` | **It needs permission or input — it's blocked** |
-| `Stop` | Turn finished — done, awaiting review |
-| `SubagentStop` | A subagent finished |
-
-Each hook fires a tiny command; ours POSTs the event JSON to the bridge
-daemon on `localhost`. The bridge keeps the agent state table and pushes
-display updates to the deck. **This is real, first-class, and doesn't
-require screen-scraping anything.**
-
-### Other harnesses: fallbacks, in order of preference
-
-1. **Native hook/event system** if it has one (mirror the Claude Code path).
-2. **tmux pane scraping** — `tmux capture-pane -p` on a timer, regex for
-   known prompt patterns. Harness-agnostic, works everywhere, but brittle
-   against UI changes and this is where most of the per-harness maintenance
-   burden will land. Be honest about that up front.
-3. **Process state** (is it burning CPU?) — crude liveness only, no
-   "blocked vs. thinking" distinction. Last resort.
-
-The profile JSON declares which strategy a given harness uses, so adding a
-harness stays a config change, not a code change.
+**Never type into a busy pane.** `launch_agent` refuses when the pane is
+running a program; injecting a command into someone's editor is unrecoverable.
+The double-tap split path skips the check because a fresh pane is always an
+idle shell.
 
 ---
 
-## 6. Safety: approving things you can only half-see
+## Not built
 
-A one-press physical approve button for AI agent actions is the best feature
-here and also the most dangerous one. A 21-character-wide mono display can
-show `rm -rf ./build` and `rm -rf ~/` almost identically if you're
-half-looking. Design accordingly:
+**Approvals.** A physical approve/deny button for agent permission prompts was
+designed and built, then removed: it depends on the harness *asking*, and the
+day-to-day launch command here is `cla` — `claude --dangerously-skip-permissions`.
+The two are mutually exclusive by construction. The design notes are in git
+history if that changes.
 
-- **Never truncate silently.** If the command doesn't fit, show a `▾` and
-  require the encoder to scroll before ENTER is armed. Reading is enforced by
-  the interaction, not by good intentions.
-- **"Approve and don't ask again" is hold-only**, never a tap. The
-  irreversible-ish action costs deliberate effort.
-- **Flag destructive patterns.** The bridge pattern-matches (`rm -rf`,
-  `git push --force`, `DROP TABLE`, `curl … | sh`, credential paths) and
-  renders those in inverted video with a `⚠` — and for those, ENTER requires
-  a double-press.
-- **Never auto-approve on a timer.** No "approves after 10s if you don't
-  object." Ever.
-- The deck is a *convenience* over the terminal prompt, never a replacement
-  for it — the terminal prompt stays authoritative and always visible.
-
----
-
-## 7. Protocol changes needed
-
-The current spec (`protocol-spec.md`) is device→host only. The dashboard
-requires host→device, so the wire protocol extends:
-
-**Device → host** (existing, plus hold events):
-```
-EVT KEY_AGENT2 DOWN|UP|HOLD
-EVT ENCODER +1
-HB <uptime_ms>
-```
-
-**Host → device** (new). Semantic, not pixels — sending a 1KB framebuffer
-over I2C-bound serial for every update would be wasteful and slow. The device
-owns rendering:
-```
-SLOT <n> <name> <status> <elapsed_s> <ctx_pct>
-APPROVE <agent> <tool> <text…>
-MODE DASHBOARD|APPROVE|PALETTE|FOCUS|AMBIENT
-ALERT <n>            ← invert-flash, attention signal
-```
-
----
-
-## 8. Known gap: the deck can't get your attention when you're not looking at it
-
-Honest limitation of the v1 hardware. The display can flash, but a silent
-flashing screen in your peripheral vision is a weak signal — the whole
-premise is that you're *not* looking at it until it has something to say.
-
-Cheap v2 additions that would fix this properly, in order of value:
-1. **A piezo buzzer** — a single distinct chirp on "agent blocked" is worth
-   more than every visual affordance in this document combined.
-2. **An RGB LED** (or per-key LEDs) — ambient color-coded state visible from
-   across the desk.
-3. Haptics — probably overkill for a desk device that isn't held.
-
-Worth designing the PCB with a buzzer footprint even if v1 doesn't populate it.
-
----
-
-## 9. Build order
-
-| Phase | Scope | Status |
-|---|---|---|
-| 0 | Hardware bring-up: display, encoder, 8-key matrix | ✅ validated |
-| 1 | Bridge daemon + serial event parsing + keystroke injection | ✅ built |
-| 2 | Claude Code hooks → bridge → Dashboard mode | ✅ built |
-| 3 | Approval mode + destructive-command flagging | ✅ built, verified on hardware |
-| 4 | Palette, Focus mode, hold-layer actions | ✅ built |
-| 5 | Second harness profile (proves the abstraction) | ⏳ written, unverified |
-| 6 | Custom PCB, buzzer, enclosure | 📋 not started |
-
-**Phase 2 is the real milestone.** If the dashboard genuinely answers "who
-needs me?" at a glance, the device is worth building. If it doesn't, no
-amount of macro-key polish saves it.
-
-### Verified end to end on hardware
-
-```
-physical key -> firmware safety gate -> serial -> bridge -> tmux send-keys -> agent pane
-```
-
-Confirmed: a destructive command cannot be approved before it has been
-scrolled to the end and confirmed twice, and the resulting keystroke lands in
-the correct tmux pane without stealing focus.
-
-### Still unverified
-
-The Grok and OpenCode profiles are written but have never run against those
-harnesses — their tmux scrape patterns are a starting point, not tested. And
-nothing here has yet run against a real Claude Code session over a long
-working day, which is the only test that matters for the core premise.
+**A buzzer.** The deck still can't get your attention when you aren't looking
+at it; a flashing face in peripheral vision is a weak signal. One chirp on
+"agent blocked" would be worth more than every visual affordance here. v1's PCB
+should populate one.

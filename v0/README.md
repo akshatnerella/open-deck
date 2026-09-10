@@ -19,8 +19,7 @@ v0/
 ├── bridge/
 │   ├── opendeck/           host daemon
 │   ├── profiles/           per-harness JSON (claude-code, grok, opencode)
-│   ├── hooks/              Claude Code hook script + settings snippet
-│   └── tests/              27 offline tests, no hardware needed
+│   └── tests/              95 offline tests, no hardware needed
 ├── cad/
 │   ├── stl/                printable shells + 8 keycaps
 │   └── dxf/                badge icon outlines (for remixing keycaps)
@@ -45,20 +44,27 @@ v0/
    ```
    The OLED must appear at `0x3C`. If nothing shows up, it's the wiring or a
    charge-only USB cable — not the code.
-5. **Install the bridge**:
+5. **Install the daemon** (Python 3.11+):
    ```bash
    python3 -m venv .venv && .venv/bin/pip install pyserial
    ```
-6. **Wire up hooks** — merge `bridge/hooks/settings-snippet.json` into
-   `~/.claude/settings.json`, replacing `HOOK_PATH` with the absolute path to
-   `bridge/hooks/opendeck-hook.sh`
-7. **Run**:
+6. **Run**:
    ```bash
-   cd bridge && ../.venv/bin/python -m opendeck.bridge --profile claude-code
+   cd bridge && ../.venv/bin/python -m opendeck --command cla
    ```
 
-Run your agents under `tmux` — that's how the bridge reaches panes without
-stealing focus.
+No hooks, no `settings.json` edits — everything is read from tmux. Run your
+agents under `tmux` and the deck picks them up automatically.
+
+Optional config at `~/.config/opendeck/config.json`:
+
+```json
+{
+  "launch_command": "cla",
+  "sessions": ["webapp", "api", null, null],
+  "encoder_scope": "session"
+}
+```
 
 ---
 
@@ -74,6 +80,7 @@ If something misbehaves, these isolate it faster than guessing:
 | `encoder_menu_test` | Encoder rotation with the debounced lookup-table decoder |
 | `open_deck_validate` | Display + encoder + one key together |
 | `open_deck_matrix` | Full 8-key matrix with an on-screen grid |
+| `pixie_face_test` | Pixie cycling every emotion, standalone |
 
 `tools/serial_mirror_gui.py` renders the deck's UI on your laptop from the
 same serial stream — useful for telling "the display is slow" apart from
@@ -94,8 +101,9 @@ same serial stream — useful for telling "the display is slow" apart from
 bridge/tests/run_tests.sh
 ```
 
-27 tests covering destructive-command detection, slot assignment, the approval
-queue, hook dispatch and the wire format. No hardware or harness required.
+95 tests covering gesture timing, slot assignment, tmux actions, presence
+resolution, config loading and event parsing. No hardware or tmux required —
+everything is driven through fakes.
 
 ---
 
@@ -117,5 +125,9 @@ Things that cost real debugging time, so you don't repeat them:
 - **`pinMode()` is expensive on ESP32.** Toggling rows between `OUTPUT` and
   `INPUT` every scan was slow enough to make the encoder feel laggy;
   `OUTPUT_OPEN_DRAIN` set once gives the same protection for free.
+- **A full OLED flush blocks for 29.5ms.** Sharing a thread with input means
+  the encoder is never sampled during a flush, and detents get *dropped* —
+  which reads as inconsistency, not lag. Rendering is pinned to core 0 and
+  `loop()` owns core 1. Measured: 29,500µs blind window → 390µs.
 - **A charge-only USB-C cable** will power the board and blink the charge LED
   while enumerating nothing. The LED tells you nothing about the data link.

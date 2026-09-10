@@ -1,5 +1,6 @@
 {
   "name": "OpenCode",
+  "launch_command": "opencode",
   "status_source": "tmux",
   "_comment": [
     "No first-class hook system assumed, so status comes from tmux pane",
@@ -9,25 +10,28 @@
   ],
   "tmux_scrape": {
     "poll_seconds": 1.0,
-    "blocked_patterns": ["\\(y/n\\)", "Allow\\?", "Approve", "\\[y/N\\]"],
-    "idle_patterns": ["^>\\s*$", "Ready"]
+    "blocked_patterns": [
+      "\\(y/n\\)",
+      "Allow\\?",
+      "Approve",
+      "\\[y/N\\]"
+    ],
+    "idle_patterns": [
+      "^>\\s*$",
+      "Ready"
+    ]
   },
   "actions": {
-    "KEY_TERM": {
-      "tap":  { "type": "focus" },
-      "hold": { "type": "shell", "command": "tmux new-window -n agent{slot} 'opencode'" }
-    },
     "KEY_ENTER": {
-      "tap":  { "type": "keystroke", "keys": ["return"] },
-      "hold": { "type": "none" }
-    },
-    "KEY_MIC": {
-      "tap":  { "type": "keystroke", "keys": ["f5"] },
-      "hold": { "type": "keystroke", "keys": ["f5"] }
-    },
-    "KEY_CANCEL": {
-      "tap":  { "type": "keystroke", "keys": ["escape"] },
-      "hold": { "type": "keystroke", "keys": ["ctrl", "c"] }
+      "tap": {
+        "type": "keystroke",
+        "keys": [
+          "return"
+        ]
+      },
+      "hold": {
+        "type": "none"
+      }
     }
   },
   "palette": [
@@ -36,5 +40,12 @@
     "run the tests",
     "review this diff",
     "explain this error"
+  ],
+  "_bridge_handled": [
+    "KEY_AGENT1-4: tap = summon that tmux session fullscreen, hold = interrupt it",
+    "KEY_TERM: tap = launch launch_command here, double-tap = launch in a split, hold = new window",
+    "KEY_MIC: tap = send Space (voice-mode toggle in the chat prompt)",
+    "KEY_CANCEL: tap = send Escape (deny prompt / interrupt)",
+    "KEY_ENTER: approve when a request is pending, hold = sessions overview"
   ]
 }

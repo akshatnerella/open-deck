@@ -1,5 +1,6 @@
 {
   "name": "Claude Code",
+  "launch_command": "cla",
   "status_source": "hooks",
   "_comment": [
     "ENTER and CANCEL are handled specially by the bridge when an approval is",
@@ -12,21 +13,20 @@
     "So one physical key maps to one semantic action in every state."
   ],
   "actions": {
-    "KEY_TERM": {
-      "tap":  { "type": "focus" },
-      "hold": { "type": "shell", "command": "tmux new-window -n agent{slot} 'claude'" }
-    },
     "KEY_ENTER": {
-      "tap":  { "type": "keystroke", "keys": ["return"] },
-      "hold": { "type": "keystroke", "keys": ["shift", "tab"] }
-    },
-    "KEY_MIC": {
-      "tap":  { "type": "keystroke", "keys": ["f5"] },
-      "hold": { "type": "keystroke", "keys": ["f5"] }
-    },
-    "KEY_CANCEL": {
-      "tap":  { "type": "keystroke", "keys": ["escape"] },
-      "hold": { "type": "keystroke", "keys": ["escape"] }
+      "tap": {
+        "type": "keystroke",
+        "keys": [
+          "return"
+        ]
+      },
+      "hold": {
+        "type": "keystroke",
+        "keys": [
+          "shift",
+          "tab"
+        ]
+      }
     }
   },
   "palette": [
@@ -38,5 +38,13 @@
     "explain this error",
     "commit and push",
     "what changed?"
-  ]
+  ],
+  "_bridge_handled": [
+    "KEY_AGENT1-4: tap = summon that tmux session fullscreen, hold = interrupt it",
+    "KEY_TERM: tap = launch launch_command here, double-tap = launch in a split, hold = new window",
+    "KEY_MIC: tap = send Space (voice-mode toggle in the chat prompt)",
+    "KEY_CANCEL: tap = send Escape (deny prompt / interrupt)",
+    "KEY_ENTER: approve when a request is pending, hold = sessions overview"
+  ],
+  "_launch_note": "'cla' is a shell alias. tmux send-keys types into an interactive shell, so aliases and functions resolve normally - unlike exec-style launching, which would not see them."
 }

@@ -1,5 +1,6 @@
 {
   "name": "Grok CLI",
+  "launch_command": "grok",
   "status_source": "tmux",
   "_comment": [
     "Same fallback path as OpenCode: no assumed hook system, so status comes",
@@ -8,25 +9,27 @@
   ],
   "tmux_scrape": {
     "poll_seconds": 1.0,
-    "blocked_patterns": ["\\(y/n\\)", "Allow\\?", "Approve", "\\[y/N\\]"],
-    "idle_patterns": ["^>\\s*$"]
+    "blocked_patterns": [
+      "\\(y/n\\)",
+      "Allow\\?",
+      "Approve",
+      "\\[y/N\\]"
+    ],
+    "idle_patterns": [
+      "^>\\s*$"
+    ]
   },
   "actions": {
-    "KEY_TERM": {
-      "tap":  { "type": "focus" },
-      "hold": { "type": "shell", "command": "tmux new-window -n agent{slot} 'grok'" }
-    },
     "KEY_ENTER": {
-      "tap":  { "type": "keystroke", "keys": ["return"] },
-      "hold": { "type": "none" }
-    },
-    "KEY_MIC": {
-      "tap":  { "type": "keystroke", "keys": ["f5"] },
-      "hold": { "type": "keystroke", "keys": ["f5"] }
-    },
-    "KEY_CANCEL": {
-      "tap":  { "type": "keystroke", "keys": ["escape"] },
-      "hold": { "type": "keystroke", "keys": ["ctrl", "c"] }
+      "tap": {
+        "type": "keystroke",
+        "keys": [
+          "return"
+        ]
+      },
+      "hold": {
+        "type": "none"
+      }
     }
   },
   "palette": [
@@ -34,5 +37,12 @@
     "run the tests",
     "review this diff",
     "explain this error"
+  ],
+  "_bridge_handled": [
+    "KEY_AGENT1-4: tap = summon that tmux session fullscreen, hold = interrupt it",
+    "KEY_TERM: tap = launch launch_command here, double-tap = launch in a split, hold = new window",
+    "KEY_MIC: tap = send Space (voice-mode toggle in the chat prompt)",
+    "KEY_CANCEL: tap = send Escape (deny prompt / interrupt)",
+    "KEY_ENTER: approve when a request is pending, hold = sessions overview"
   ]
 }
