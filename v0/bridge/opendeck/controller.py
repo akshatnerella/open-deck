@@ -6,7 +6,7 @@ import logging
 import queue
 import time
 
-from . import actions
+from . import actions, panes
 from .actions import Context
 from .config import Config
 from .events import Connected, Disconnected, EncoderEvent, Heartbeat, KeyEvent
@@ -67,10 +67,7 @@ class Controller:
     def _announce(self, action: str, args: dict) -> None:
         match action:
             case "summon":
-                slot = args.get("slot", 0)
-                session = self._slots.session_for(slot)
-                if session:
-                    self._face.toast(f"{self._slots.label(slot)} - {session}")
+                self._push_pane_list()
             case "interrupt":
                 slot = args.get("slot", 0)
                 if self._slots.session_for(slot):
@@ -91,8 +88,22 @@ class Controller:
             name = self._slots.label(slot) if slot is not None else snapshot.attention_session
             self._face.toast(f"{name} wants you")
 
+    def _push_pane_list(self) -> None:
+        session = self._slots.current_session()
+        if session is None:
+            return
+        slot = self._slots.slot_of(session)
+        label = self._slots.label(slot) if slot is not None else "--"
+        pane_list = self._context.tmux.panes(session)
+        position = next((i + 1 for i, p in enumerate(pane_list) if p.active), 0)
+        title = f"{label} {session} {position}/{len(pane_list)}"
+        self._face.show_list(
+            panes.build_list(title, pane_list, self._context.tmux.windows(session))
+        )
+
     def handle_encoder(self, delta: int) -> None:
         actions.cycle_pane(delta)(self._context)
+        self._push_pane_list()
 
     def _handle(self, event: object, now: float) -> None:
         match event:
@@ -156,6 +167,7 @@ class Controller:
             if now - last_refresh >= REFRESH_INTERVAL:
                 self._slots.refresh()
                 self._announce_presence(self._presence.evaluate(now))
+                self._face.keepalive()
                 last_refresh = now
 
     def stop(self) -> None:
