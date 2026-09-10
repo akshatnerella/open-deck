@@ -337,6 +337,12 @@ void setup() {
   // Arduino's loopTask runs on core 1, so rendering goes to core 0.
   xTaskCreatePinnedToCore(renderTask, "render", 4096, nullptr, 1, nullptr, 0);
 
+  // The 5s offline window exists to tolerate a host going quiet, and boot is
+  // exactly when a quiet host is expected - the daemon starts seconds after
+  // the deck powers up. Without this the first renderTask iteration sees
+  // lastHostCommand == 0 and slams straight to the offline face.
+  lastHostCommand = millis();
+
   Serial.println("Open Deck ready");
 }
 
