@@ -33,6 +33,12 @@ class TestPaneLabel(unittest.TestCase):
         label = pane_label(pane(command="x" * 40), None)
         self.assertLessEqual(len(label), 13)
 
+    def test_label_strips_newlines(self):
+        # The wire protocol is newline-framed: a stray \n in a field would
+        # split the line and corrupt the frame.
+        self.assertEqual(pane_label(pane(command="a\nb"), None), "a_b")
+        self.assertEqual(pane_label(pane(command="a\rb"), None), "a_b")
+
 
 class TestBuildList(unittest.TestCase):
     def test_title_leads_the_payload(self):
@@ -90,6 +96,16 @@ class TestBuildList(unittest.TestCase):
         payload = build_list("FOX web app|x", [pane(pane_active=True, window_active=True)], [])
         title = payload.split("|")[0]
         self.assertEqual(title, "FOX web app_x")
+
+    def test_title_strips_newlines(self):
+        payload = build_list("FOX\nweb\rapp", [pane(pane_active=True, window_active=True)], [])
+        self.assertEqual(payload.split("|")[0], "FOX_web_app")
+
+    def test_payload_is_always_a_single_line(self):
+        panes = [pane(index=0, command="a\nb", window_active=True, pane_active=True)]
+        payload = build_list("t\nitle", panes, [])
+        self.assertNotIn("\n", payload)
+        self.assertNotIn("\r", payload)
 
 
 if __name__ == "__main__":
