@@ -76,6 +76,16 @@ class Controller:
             case "new_window":
                 self._face.toast("new window")
 
+    def _announce_presence(self, snapshot) -> None:
+        if not self._face.apply(snapshot):
+            return
+        # Naming the session is the whole point of the alert - "something wants
+        # you" is not actionable, "OWL wants you" is.
+        if snapshot.state is State.ATTENTION and snapshot.attention_session:
+            slot = self._slots.slot_of(snapshot.attention_session)
+            name = self._slots.label(slot) if slot is not None else snapshot.attention_session
+            self._face.toast(f"{name} wants you")
+
     def handle_encoder(self, delta: int) -> None:
         actions.cycle_pane(delta)(self._context)
 
@@ -142,7 +152,7 @@ class Controller:
 
             if now - last_refresh >= REFRESH_INTERVAL:
                 self._slots.refresh()
-                self._face.apply(self._presence.evaluate(now))
+                self._announce_presence(self._presence.evaluate(now))
                 last_refresh = now
 
     def stop(self) -> None:

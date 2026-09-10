@@ -56,6 +56,14 @@ v0/
 No hooks, no `settings.json` edits — everything is read from tmux. Run your
 agents under `tmux` and the deck picks them up automatically.
 
+7. **Optionally run it at login**:
+   ```bash
+   ./scripts/install-service.sh cla
+   ```
+   Installs a launchd agent that restarts on crash. Logs to
+   `~/Library/Logs/opendeck.log`; the script prints the stop/uninstall
+   commands.
+
 Optional config at `~/.config/opendeck/config.json`:
 
 ```json

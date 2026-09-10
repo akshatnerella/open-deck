@@ -68,6 +68,16 @@ const unsigned long TOAST_MS = 1800;
 // a single thread the display is saturated and readRotary() is never called
 // during the flush. Encoder detents last only a few ms, so they were not
 // arriving late, they were being dropped. Input now owns core 1 exclusively.
+// Attention pulse: invertDisplay() is a single command byte, not a framebuffer
+// write, so flashing costs nothing next to a ~29.5ms flush. A burst on entry
+// catches the eye; a short repeat every 10s keeps a standing alert visible
+// without being maddening.
+int flashTicks = 0;
+unsigned long flashNext = 0;
+unsigned long lastPulse = 0;
+const unsigned long FLASH_MS = 110;
+const unsigned long PULSE_INTERVAL_MS = 10000;
+
 portMUX_TYPE faceMux = portMUX_INITIALIZER_UNLOCKED;
 volatile int sharedState = PX_IDLE;
 volatile bool toastDirty = false;
@@ -113,6 +123,9 @@ void applyState(PixieState next) {
       eyes.setMood(ANGRY);
       eyes.setIdleMode(OFF);
       eyes.setPosition(DEFAULT);
+      flashTicks = 6;
+      flashNext = 0;
+      lastPulse = millis();
       break;
     case PX_DONE:
       eyes.setMood(HAPPY);
@@ -282,6 +295,19 @@ void renderTask(void *) {
       toastDrawn = false;
     }
     applyState(static_cast<PixieState>(sharedState));
+
+    if (flashTicks > 0) {
+      if (millis() >= flashNext) {
+        display.invertDisplay(flashTicks % 2 == 0);
+        flashNext = millis() + FLASH_MS;
+        if (--flashTicks == 0) display.invertDisplay(false);
+      }
+    } else if (pixieState == PX_ATTENTION &&
+               millis() - lastPulse >= PULSE_INTERVAL_MS) {
+      lastPulse = millis();
+      flashTicks = 2;
+      flashNext = 0;
+    }
 
     if (millis() < toastUntil) {
       if (!toastDrawn) drawToast();

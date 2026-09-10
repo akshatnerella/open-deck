@@ -21,12 +21,16 @@ class Face:
         """Forget the pushed state so the next update repaints."""
         self._state = None
 
-    def apply(self, snapshot: Snapshot) -> None:
+    def apply(self, snapshot: Snapshot) -> bool:
+        """Push the expression, returning True if it changed."""
         if snapshot.state is self._state:
-            return
+            return False
         self._state = snapshot.state
         self._transport.send(f"STATE {snapshot.state}")
         log.debug("state -> %s", snapshot.state)
+        return True
 
     def toast(self, text: str) -> None:
-        self._transport.send(f"TOAST {text[:TOAST_MAX]}")
+        text = text[:TOAST_MAX]
+        log.info("toast: %s", text)
+        self._transport.send(f"TOAST {text}")

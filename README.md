@@ -116,14 +116,17 @@ Start with [`v0/README.md`](v0/README.md) and [`v0/BOM.md`](v0/BOM.md).
 | Grok / OpenCode profiles | ⏳ written, unverified against those harnesses |
 | Custom PCB | 📋 v1 |
 
-### Known gap
+### Attention
 
-The deck can't get your attention when you aren't looking at it. A flashing
-face in peripheral vision is a weak signal, and the premise is that you're
-*not* watching until it has something to say.
+When a session you aren't looking at rings a bell or shows activity, the deck
+inverts the whole screen three times, Pixie turns to a scowl, and a toast names
+the session (`OWL wants you`). A standing alert re-pulses every 10s.
 
-**A piezo buzzer would be worth more than every visual affordance in this
-repo.** v1 should populate one.
+`invertDisplay()` is a single command byte rather than a framebuffer write, so
+flashing is effectively free next to the ~29.5ms cost of a redraw.
+
+A piezo buzzer would still beat any visual signal for catching attention when
+you're looking elsewhere entirely — v1's PCB should populate one.
 
 ---
 
