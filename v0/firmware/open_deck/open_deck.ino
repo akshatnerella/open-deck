@@ -11,8 +11,9 @@
 //   EVT ENCODER <+1|-1>
 //   HB <uptime_ms>
 // Host -> device:
-//   STATE <idle|working|attention|done|active|asleep>
+//   FACE <alert|busy|done|calm>
 //   TOAST <text>
+//   LIST <title>|<row>|...
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -55,13 +56,20 @@ static uint8_t rotCode = 0;
 static uint16_t rotStore = 0;
 
 // ---------- face ----------
-enum PixieState { PX_IDLE, PX_WORKING, PX_ATTENTION, PX_DONE, PX_ACTIVE, PX_ASLEEP };
-PixieState pixieState = PX_IDLE;
+enum PixieState { PX_CALM, PX_BUSY, PX_ALERT, PX_DONE, PX_OFFLINE };
+PixieState pixieState = PX_CALM;
 
 char toastText[22] = "";
 unsigned long toastUntil = 0;
 bool toastDrawn = false;
 const unsigned long TOAST_MS = 1800;
+
+#define LIST_ROWS 6
+char listRows[LIST_ROWS][22];
+int  listCount = 0;
+unsigned long listUntil = 0;
+bool listDrawn = false;
+const unsigned long LIST_MS = 1200;
 
 // plumber: rendering runs on the second core. A full SH1106 framebuffer flush
 // blocks for ~29.5ms (measured), and RoboEyes wants a frame every 20ms - so on
@@ -79,9 +87,19 @@ const unsigned long FLASH_MS = 110;
 const unsigned long PULSE_INTERVAL_MS = 10000;
 
 portMUX_TYPE faceMux = portMUX_INITIALIZER_UNLOCKED;
-volatile int sharedState = PX_IDLE;
+volatile int sharedState = PX_CALM;
 volatile bool toastDirty = false;
 char sharedToast[22] = "";
+
+volatile bool listDirty = false;
+char sharedList[LIST_ROWS][22];
+int  sharedListCount = 0;
+
+volatile unsigned long lastHostCommand = 0;
+const unsigned long OFFLINE_AFTER_MS = 5000;
+const unsigned long BLANK_AFTER_MS   = 15UL * 60 * 1000;
+bool offlineToastShown = false;
+bool panelBlanked = false;
 
 void emit(const String &line) {
   // ESP32-S3 native USB CDC blocks once its TX ring fills with no host
@@ -109,17 +127,18 @@ void applyState(PixieState next) {
 
   // Moving straight between two moods' eyelid shapes leaves erase artifacts,
   // so settle through DEFAULT and let each transition be a smaller delta.
+  eyes.open();
   eyes.setMood(DEFAULT);
   eyes.setCuriosity(false);
   eyes.setIdleMode(ON, 3, 2);
   eyes.setAutoblinker(ON, 3, 2);
 
   switch (next) {
-    case PX_WORKING:
+    case PX_BUSY:
       eyes.setMood(DEFAULT);
       eyes.setCuriosity(true);
       break;
-    case PX_ATTENTION:
+    case PX_ALERT:
       eyes.setMood(ANGRY);
       eyes.setIdleMode(OFF);
       eyes.setPosition(DEFAULT);
@@ -131,13 +150,11 @@ void applyState(PixieState next) {
       eyes.setMood(HAPPY);
       eyes.anim_laugh();
       break;
-    case PX_ACTIVE:
+    case PX_OFFLINE:
       eyes.setMood(DEFAULT);
-      break;
-    case PX_ASLEEP:
-      eyes.setMood(TIRED);
       eyes.setIdleMode(OFF);
-      eyes.setAutoblinker(ON, 6, 3);
+      eyes.setAutoblinker(OFF);
+      eyes.close();
       break;
     default:
       eyes.setMood(DEFAULT);
@@ -146,12 +163,10 @@ void applyState(PixieState next) {
 }
 
 PixieState parseState(const String &name) {
-  if (name == "working")   return PX_WORKING;
-  if (name == "attention") return PX_ATTENTION;
-  if (name == "done")      return PX_DONE;
-  if (name == "active")    return PX_ACTIVE;
-  if (name == "asleep")    return PX_ASLEEP;
-  return PX_IDLE;
+  if (name == "busy")  return PX_BUSY;
+  if (name == "alert") return PX_ALERT;
+  if (name == "done")  return PX_DONE;
+  return PX_CALM;
 }
 
 void showToast(const String &text) {
@@ -159,6 +174,23 @@ void showToast(const String &text) {
   strncpy(sharedToast, text.c_str(), sizeof(sharedToast) - 1);
   sharedToast[sizeof(sharedToast) - 1] = '\0';
   toastDirty = true;
+  portEXIT_CRITICAL(&faceMux);
+}
+
+void showList(const String &payload) {
+  portENTER_CRITICAL(&faceMux);
+  sharedListCount = 0;
+  int start = 0;
+  while (sharedListCount < LIST_ROWS && start <= (int)payload.length()) {
+    int bar = payload.indexOf('|', start);
+    String field = (bar < 0) ? payload.substring(start) : payload.substring(start, bar);
+    strncpy(sharedList[sharedListCount], field.c_str(), 21);
+    sharedList[sharedListCount][21] = '\0';
+    sharedListCount++;
+    if (bar < 0) break;
+    start = bar + 1;
+  }
+  listDirty = true;
   portEXIT_CRITICAL(&faceMux);
 }
 
@@ -177,6 +209,21 @@ void drawToast() {
   toastDrawn = true;
 }
 
+void drawList() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0, 0);
+  display.print(listRows[0]);
+  display.drawFastHLine(0, 10, 128, SH110X_WHITE);
+  for (int i = 1; i < listCount; i++) {
+    display.setCursor(0, 3 + i * 10);
+    display.print(listRows[i]);
+  }
+  display.display();
+  listDrawn = true;
+}
+
 String nextToken(const String &s, int &pos) {
   while (pos < (int)s.length() && s[pos] == ' ') pos++;
   int start = pos;
@@ -185,14 +232,19 @@ String nextToken(const String &s, int &pos) {
 }
 
 void handleCommand(const String &line) {
+  lastHostCommand = millis();
+
   int pos = 0;
   String cmd = nextToken(line, pos);
 
-  if (cmd == "STATE") {
+  if (cmd == "FACE") {
     sharedState = parseState(nextToken(line, pos));
   } else if (cmd == "TOAST") {
     while (pos < (int)line.length() && line[pos] == ' ') pos++;
     showToast(line.substring(pos));
+  } else if (cmd == "LIST") {
+    while (pos < (int)line.length() && line[pos] == ' ') pos++;
+    showList(line.substring(pos));
   }
 }
 
@@ -274,6 +326,14 @@ void setup() {
   eyes.setAutoblinker(ON, 3, 2);
   eyes.setIdleMode(ON, 3, 2);
 
+  // Confirms the panel and I2C bus are alive before any host is involved.
+  eyes.close();
+  for (int i = 0; i < 12; i++) { eyes.update(); delay(25); }
+  eyes.open();
+  for (int i = 0; i < 12; i++) { eyes.update(); delay(25); }
+  eyes.blink();
+  for (int i = 0; i < 20; i++) { eyes.update(); delay(25); }
+
   // Arduino's loopTask runs on core 1, so rendering goes to core 0.
   xTaskCreatePinnedToCore(renderTask, "render", 4096, nullptr, 1, nullptr, 0);
 
@@ -294,7 +354,48 @@ void renderTask(void *) {
       toastUntil = millis() + TOAST_MS;
       toastDrawn = false;
     }
-    applyState(static_cast<PixieState>(sharedState));
+
+    portENTER_CRITICAL(&faceMux);
+    bool newList = listDirty;
+    if (newList) {
+      for (int i = 0; i < sharedListCount; i++) strncpy(listRows[i], sharedList[i], 22);
+      listCount = sharedListCount;
+      listDirty = false;
+    }
+    portEXIT_CRITICAL(&faceMux);
+    if (newList) {
+      listUntil = millis() + LIST_MS;
+      listDrawn = false;
+    }
+
+    bool hostAlive = lastHostCommand && (millis() - lastHostCommand < OFFLINE_AFTER_MS);
+    if (!hostAlive) {
+      if (!offlineToastShown) {
+        offlineToastShown = true;
+        showToast("host offline");
+      }
+      applyState(PX_OFFLINE);
+    } else {
+      offlineToastShown = false;
+      if (panelBlanked) {
+        panelBlanked = false;
+        display.clearDisplay();
+      }
+      applyState(static_cast<PixieState>(sharedState));
+    }
+
+    // Nothing live is being shown, so there is nothing to lose by blanking -
+    // and a static face would retain on a mono OLED.
+    if (!hostAlive && lastHostCommand &&
+        millis() - lastHostCommand > BLANK_AFTER_MS) {
+      if (!panelBlanked) {
+        panelBlanked = true;
+        display.clearDisplay();
+        display.display();
+      }
+      vTaskDelay(pdMS_TO_TICKS(200));
+      continue;
+    }
 
     if (flashTicks > 0) {
       if (millis() >= flashNext) {
@@ -302,7 +403,7 @@ void renderTask(void *) {
         flashNext = millis() + FLASH_MS;
         if (--flashTicks == 0) display.invertDisplay(false);
       }
-    } else if (pixieState == PX_ATTENTION &&
+    } else if (pixieState == PX_ALERT &&
                millis() - lastPulse >= PULSE_INTERVAL_MS) {
       lastPulse = millis();
       flashTicks = 2;
@@ -311,6 +412,9 @@ void renderTask(void *) {
 
     if (millis() < toastUntil) {
       if (!toastDrawn) drawToast();
+      vTaskDelay(pdMS_TO_TICKS(20));
+    } else if (millis() < listUntil) {
+      if (!listDrawn) drawList();
       vTaskDelay(pdMS_TO_TICKS(20));
     } else {
       eyes.update();
