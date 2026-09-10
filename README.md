@@ -35,9 +35,20 @@ killed — everything keeps running.
 separate windows alike; a terminal is a terminal.
 
 **Pixie reacts.** The face is driven by tmux state — she looks concerned when
-something wants attention in a session you aren't watching, happy when an agent
-finishes, curious while one works, sleepy when you've been away. Brief text
-toasts narrate what a keypress did.
+something wants attention in a session you aren't watching, happy when an
+agent finishes, curious while one works. Brief text toasts narrate what a
+keypress did.
+
+**Turning the dial, or pressing a project key, glances at that session.** The
+face gives way to a pane list — title, position, up to five rows with the
+active one always in view — for about a second, then decays back to Pixie.
+Summon shows the list too, in place of a toast, because naming the
+destination and showing its contents in one shot beats a line of text.
+
+**A live deck never lies about being live.** The daemon pings the display
+every couple of seconds; if that stops, Pixie's eyes close and a `host
+offline` toast appears within about five seconds, rather than leaving a
+stale face on screen.
 
 ---
 
@@ -79,12 +90,13 @@ a fresh pane is always safe.
 │  Open Deck    │─────────────▶│    opendeck     │────────────▶│ sessions │
 │  XIAO ESP32S3 │  EVT / HB    │  (host daemon)  │  + Ghostty  │  panes   │
 │               │◀─────────────│                 │◀────────────│  agents  │
-└──────────────┘ STATE / TOAST └────────────────┘   polling   └──────────┘
+└──────────────┘ FACE/TOAST/LIST └────────────────┘   polling   └──────────┘
 ```
 
 The firmware knows nothing about tmux or any harness — it emits semantic events
-(`EVT KEY_AGENT2 HOLD`) and renders whatever state the host pushes back
-(`STATE working`). All the knowledge lives in the daemon.
+(`EVT KEY_AGENT2 HOLD`) and renders whatever the host pushes back
+(`FACE busy`, a `TOAST`, or a `LIST` of panes). All the knowledge lives in the
+daemon.
 
 **Everything is derived from tmux**, which already tracks per-window activity
 and bell flags — the "something happened where you aren't looking" signal, free,
@@ -112,7 +124,8 @@ Start with [`v0/README.md`](v0/README.md) and [`v0/BOM.md`](v0/BOM.md).
 |---|---|
 | Hardware: display, encoder, 8-key matrix | ✅ validated |
 | Firmware: input on core 1, rendering on core 0 | ✅ built |
-| Host daemon: tmux navigation + Pixie | ✅ built, 95 tests |
+| Host daemon: tmux navigation + Pixie | ✅ built, 132 tests |
+| `FACE`/`LIST` protocol, glance layer, offline watchdog | ✅ built, tests pass; not yet verified on physical hardware |
 | Grok / OpenCode profiles | ⏳ written, unverified against those harnesses |
 | Custom PCB | 📋 v1 |
 

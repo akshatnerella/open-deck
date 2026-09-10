@@ -1,7 +1,10 @@
 # Open Deck v0
 
 The hand-wired prototype: breadboard, off-the-shelf parts, USB-tethered.
-**Everything here is built and verified working on real hardware.**
+**Everything here is built and verified working on real hardware.** The
+`FACE`/`LIST` wire protocol and the glance layer are new — built and covered
+by the host-side test suite, but not yet re-verified against the physical
+deck.
 
 v1 will replace the breadboard with a custom PCB — see the root
 [README](../README.md).
@@ -19,7 +22,7 @@ v0/
 ├── bridge/
 │   ├── opendeck/           host daemon
 │   ├── profiles/           per-harness JSON (claude-code, grok, opencode)
-│   └── tests/              95 offline tests, no hardware needed
+│   └── tests/              132 offline tests, no hardware needed
 ├── cad/
 │   ├── stl/                printable shells + 8 keycaps
 │   └── dxf/                badge icon outlines (for remixing keycaps)
@@ -109,9 +112,9 @@ same serial stream — useful for telling "the display is slow" apart from
 bridge/tests/run_tests.sh
 ```
 
-95 tests covering gesture timing, slot assignment, tmux actions, presence
-resolution, config loading and event parsing. No hardware or tmux required —
-everything is driven through fakes.
+132 tests covering gesture timing, slot assignment, tmux actions, presence
+resolution, pane-list formatting, config loading and event parsing. No
+hardware or tmux required — everything is driven through fakes.
 
 ---
 
@@ -143,3 +146,6 @@ Things that cost real debugging time, so you don't repeat them:
   `loop()` owns core 1. Measured: 29,500µs blind window → 390µs.
 - **A charge-only USB-C cable** will power the board and blink the charge LED
   while enumerating nothing. The LED tells you nothing about the data link.
+- **A status display that lies is worse than none.** Without a host keepalive
+  the deck happily showed a stale face forever. Any received command is a
+  liveness tick; 5s of silence closes Pixie's eyes.
