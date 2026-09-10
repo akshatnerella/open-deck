@@ -113,7 +113,7 @@ class TestAttentionAnnounce(unittest.TestCase):
         ctrl, transport = self._controller()
         ctrl._announce_presence(Snapshot(State.BUSY))
         self.assertEqual([m for m in transport.sent if m.startswith("TOAST")], [])
-        self.assertIn("STATE busy", transport.sent)
+        self.assertIn("FACE busy", transport.sent)
 
     def test_unmapped_session_falls_back_to_its_name(self):
         from opendeck.presence import Snapshot, State
