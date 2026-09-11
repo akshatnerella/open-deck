@@ -125,7 +125,7 @@ Start with [`v0/README.md`](v0/README.md) and [`v0/BOM.md`](v0/BOM.md).
 | Hardware: display, encoder, 8-key matrix | ✅ validated |
 | Firmware: input on core 1, rendering on core 0 | ✅ built |
 | Host daemon: tmux navigation + Pixie | ✅ built, 132 tests |
-| `FACE`/`LIST` protocol, glance layer, offline watchdog | ✅ built, tests pass; not yet verified on physical hardware |
+| `FACE`/`LIST` protocol, glance layer, offline watchdog | ✅ built, 134 tests, verified on hardware |
 | Grok / OpenCode profiles | ⏳ written, unverified against those harnesses |
 | Custom PCB | 📋 v1 |
 
