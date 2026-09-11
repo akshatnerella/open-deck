@@ -1,0 +1,24 @@
+{
+  "_readme": [
+    "Merge the 'hooks' block into ~/.claude/settings.json (user-level, so every",
+    "project reports to the deck) or .claude/settings.json for one project.",
+    "",
+    "Replace HOOK_PATH with the absolute path to opendeck-hook.sh, e.g.",
+    "  /Users/you/Documents/open-deck/v0/bridge/hooks/opendeck-hook.sh",
+    "",
+    "Every hook is fire-and-forget with a 1s timeout and always exits 0, so a",
+    "stopped daemon can never block or fail an agent turn.",
+    "",
+    "Notification is what powers the approve screen. It only fires when the",
+    "harness actually asks for permission - a session launched with",
+    "--dangerously-skip-permissions never asks, so approvals stay dormant there."
+  ],
+  "hooks": {
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "HOOK_PATH SessionStart" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "HOOK_PATH UserPromptSubmit" }] }],
+    "PreToolUse":       [{ "matcher": "*", "hooks": [{ "type": "command", "command": "HOOK_PATH PreToolUse" }] }],
+    "Notification":     [{ "hooks": [{ "type": "command", "command": "HOOK_PATH Notification" }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "HOOK_PATH Stop" }] }],
+    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "HOOK_PATH SessionEnd" }] }]
+  }
+}

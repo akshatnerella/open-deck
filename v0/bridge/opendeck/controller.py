@@ -7,6 +7,8 @@ import queue
 import time
 
 from . import actions, panes
+from .agents import AgentRegistry
+from .hookserver import DEFAULT_PORT, HookServer
 from .actions import Context
 from .config import Config
 from .events import Connected, Disconnected, EncoderEvent, Heartbeat, KeyEvent
@@ -42,7 +44,11 @@ class Controller:
                 key for key, gestures in config.bindings.items() if "double" in gestures
             ),
         )
-        self._presence = PresenceMonitor(tmux, self._slots)
+        self._agents = AgentRegistry()
+        self._presence = PresenceMonitor(tmux, self._slots, self._agents)
+        # Bound lazily in run(): constructing a Controller must not claim a
+        # port, or every test that builds one fights for 8787.
+        self._hooks: HookServer | None = None
         self._face = Face(transport)
         self._running = False
 
@@ -60,6 +66,12 @@ class Controller:
         except (KeyError, TypeError) as exc:
             log.error("bad binding for %s %s: %s", key, gesture, exc)
             return
+        if gesture == "tap" and key in ("KEY_ENTER", "KEY_CANCEL"):
+            # An agent stopped on a permission prompt owns these keys: the
+            # deck's whole reason for showing the request is to answer it.
+            if self._answer_approval(key == "KEY_ENTER"):
+                return
+
         log.info("%s %s -> %s", key, gesture, binding.action)
         action(self._context)
         self._announce(binding.action, binding.args)
@@ -90,6 +102,40 @@ class Controller:
             name = self._slots.label(slot) if slot is not None else snapshot.attention_session
             self._face.toast(f"{name} wants you")
 
+    def on_hook(self, event: str, payload: dict) -> None:
+        target = payload.get("tmux_target") or ""
+        session = target.split(":")[0] if target else ""
+        self._agents.record(event, target, session, payload)
+        self._dirty = True
+
+    def _push_approval(self) -> None:
+        approval = self._agents.current_approval
+        if approval is None:
+            self._transport.send("APPROVE_CLEAR")
+            return
+        queued = len(self._agents.approvals)
+        self._transport.send(f"APPROVE_COUNT {queued}")
+        slot = self._slots.slot_of(approval.target.split(":")[0])
+        who = self._slots.label(slot) if slot is not None else approval.agent
+        self._transport.send(
+            f"APPROVE {who} {1 if approval.dangerous else 0} "
+            f"{approval.tool} {approval.text}"
+        )
+
+    def _answer_approval(self, approved: bool) -> bool:
+        """Answer a pending permission request. True if one was pending."""
+        approval = self._agents.current_approval
+        if approval is None:
+            return False
+        key = "Enter" if approved else "Escape"
+        self._context.tmux.send_keys(approval.target, key)
+        log.info("%s %s on %s", "approved" if approved else "denied",
+                 approval.tool, approval.target)
+        self._agents.resolve(approval.target, approved)
+        self._push_approval()
+        self._dirty = True
+        return True
+
     def _push_pane_list(self, session: str | None = None) -> None:
         session = session or self._slots.current_session()
         if session is None:
@@ -99,8 +145,12 @@ class Controller:
         pane_list = self._context.tmux.panes(session)
         position = next((i + 1 for i, p in enumerate(pane_list) if p.active), 0)
         title = f"{label} {session} {position}/{len(pane_list)}"
+        by_target = {a.target.split(":", 1)[1]: a
+                     for a in self._agents.in_session(session)
+                     if ":" in a.target}
         self._face.show_list(
-            panes.build_list(title, pane_list, self._context.tmux.windows(session))
+            panes.build_list(title, pane_list,
+                             self._context.tmux.windows(session), agents=by_target)
         )
 
     def handle_encoder(self, delta: int) -> None:
@@ -145,6 +195,9 @@ class Controller:
 
     def run(self) -> None:
         self._running = True
+        if self._hooks is None:
+            self._hooks = HookServer(self.on_hook, DEFAULT_PORT)
+            self._hooks.start()
         self._slots.refresh()
         last_refresh = time.monotonic()
 
@@ -169,8 +222,12 @@ class Controller:
             if now - last_refresh >= REFRESH_INTERVAL:
                 self._slots.refresh()
                 self._announce_presence(self._presence.evaluate(now))
+                self._push_approval()
                 self._face.keepalive()
                 last_refresh = now
 
     def stop(self) -> None:
         self._running = False
+        if self._hooks is not None:
+            self._hooks.stop()
+            self._hooks = None

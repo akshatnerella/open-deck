@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum
 
+from .agents import AgentRegistry, Status
 from .slots import SlotTable
 from .tmux import SHELLS, Tmux
 
@@ -55,15 +56,30 @@ class PresenceMonitor:
     that are simultaneously true.
     """
 
-    def __init__(self, tmux: Tmux, slots: SlotTable) -> None:
+    def __init__(self, tmux: Tmux, slots: SlotTable,
+                 agents: AgentRegistry | None = None) -> None:
         self._tmux = tmux
         self._slots = slots
+        self._agents = agents or AgentRegistry()
         self._agent_seen: set[str] = set()
 
     def evaluate(self, now: float | None = None) -> Snapshot:
         current = self._slots.current_session()
         if current is None:
             return Snapshot(State.CALM)
+
+        # Hooks beat inference wherever we have them: tmux can only see that a
+        # process is running, not that it is stopped waiting on a decision.
+        blocked = self._agents.blocked()
+        if blocked:
+            return Snapshot(State.ALERT, attention_session=blocked[0].session)
+
+        known = self._agents.in_session(current)
+        if known:
+            if any(a.status is Status.DONE for a in known):
+                return Snapshot(State.DONE)
+            if any(a.status is Status.WORKING for a in known):
+                return Snapshot(State.BUSY)
 
         # 1. Something wants attention in a session you are not looking at.
         for session in self._slots.slots:

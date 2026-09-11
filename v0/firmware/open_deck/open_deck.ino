@@ -85,6 +85,19 @@ const unsigned long TOAST_MS = 1800;
 
 #define LIST_ROWS 6
 char listRows[LIST_ROWS][22];
+
+// Approval state. The scroll gate is a safety feature, not decoration: at 21
+// characters "rm -rf ./build" and "rm -rf ~/" look alike, so a command too
+// long to fit cannot be approved until it has actually been scrolled.
+char approveWho[10]  = "";
+char approveTool[18] = "";
+char approveText[321] = "";
+bool approveDanger  = false;
+bool approveConfirm = false;
+bool approveArmed   = false;
+int  approveScroll  = 0;
+int  approveCount   = 1;
+bool approveActive  = false;
 int  listCount = 0;
 unsigned long listUntil = 0;
 bool listDrawn = false;
@@ -237,6 +250,64 @@ void drawToast() {
   toastDrawn = true;
 }
 
+int wrapApprove(char buf[][22], int maxLines) {
+  int line = 0, col = 0;
+  for (int i = 0; approveText[i] && line < maxLines; i++) {
+    if (col == 21) {
+      if (buf) buf[line][col] = '\0';
+      line++; col = 0;
+      if (line >= maxLines) break;
+    }
+    if (buf) buf[line][col] = approveText[i];
+    col++;
+  }
+  if (buf && line < maxLines) buf[line][col] = '\0';
+  return (col > 0) ? line + 1 : line;
+}
+
+void drawApprove() {
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  if (approveDanger) {
+    display.fillRect(0, 0, 128, 10, SH110X_WHITE);
+    display.setTextColor(SH110X_BLACK);
+    display.setCursor(0, 1);
+    display.print("! ");
+  } else {
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(0, 1);
+  }
+  display.print(approveWho);
+  if (approveCount > 1) { display.print(" 1/"); display.print(approveCount); }
+
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0, 13);
+  display.print(approveTool);
+
+  static char lines[16][22];
+  int total = wrapApprove(lines, 16);
+  const int visible = 3;
+  if (approveScroll > total - visible) approveScroll = max(0, total - visible);
+  for (int i = 0; i < visible; i++) {
+    int idx = approveScroll + i;
+    if (idx >= total) break;
+    display.setCursor(0, 24 + i * 9);
+    display.print(lines[idx]);
+  }
+  if (total > visible && approveScroll < total - visible) {
+    display.setCursor(120, 42);
+    display.print("v");
+  }
+
+  display.drawFastHLine(0, 53, 128, SH110X_WHITE);
+  display.setCursor(0, 56);
+  if (!approveArmed)       display.print("SCROLL TO READ ALL");
+  else if (approveConfirm) display.print("! ENT AGAIN=CONFIRM");
+  else                     display.print("ENT=yes  X=no");
+  display.display();
+}
+
 void drawList() {
   display.clearDisplay();
   display.setTextSize(1);
@@ -283,6 +354,32 @@ void handleCommand(const String &line) {
   } else if (cmd == "TOAST") {
     while (pos < (int)line.length() && line[pos] == ' ') pos++;
     showToast(line.substring(pos));
+  } else if (cmd == "APPROVE") {
+    String who  = nextToken(line, pos);
+    bool danger = (nextToken(line, pos).toInt() != 0);
+    String tool = nextToken(line, pos);
+    while (pos < (int)line.length() && line[pos] == ' ') pos++;
+    String text = line.substring(pos);
+    // The host re-pushes on a timer; re-applying an identical request would
+    // reset the scroll position the user is part-way through reading.
+    if (!(approveActive && text == approveText && who == approveWho)) {
+      strncpy(approveWho, who.c_str(), sizeof(approveWho) - 1);
+      approveWho[sizeof(approveWho) - 1] = '\0';
+      strncpy(approveTool, tool.c_str(), sizeof(approveTool) - 1);
+      approveTool[sizeof(approveTool) - 1] = '\0';
+      strncpy(approveText, text.c_str(), sizeof(approveText) - 1);
+      approveText[sizeof(approveText) - 1] = '\0';
+      approveDanger  = danger;
+      approveScroll  = 0;
+      approveConfirm = false;
+      approveArmed   = (wrapApprove(nullptr, 16) <= 3);
+      approveActive  = true;
+      flashTicks = 6; flashNext = 0; lastPulse = millis();
+    }
+  } else if (cmd == "APPROVE_COUNT") {
+    approveCount = nextToken(line, pos).toInt();
+  } else if (cmd == "APPROVE_CLEAR") {
+    approveActive = false;
   } else if (cmd == "LIST") {
     while (pos < (int)line.length() && line[pos] == ' ') pos++;
     showList(line.substring(pos));
@@ -301,6 +398,38 @@ void pollHost() {
       buf += c;
     }
   }
+}
+
+bool enterSuppressed = false;
+
+// Returns false when the event must not leave the device at all.
+//
+// This has to swallow the event, not merely skip local handling: the host acts
+// on any EVT KEY_ENTER it receives, so emitting one while the command is still
+// unread would approve it anyway and reduce the scroll gate to decoration.
+bool approveGate(uint8_t idx, bool isDown) {
+  if (!approveActive) return true;
+  bool isEnter  = (strcmp(KEY_NAMES[idx], "KEY_ENTER") == 0);
+  bool isCancel = (strcmp(KEY_NAMES[idx], "KEY_CANCEL") == 0);
+
+  if (isCancel) {
+    approveConfirm = false;   // deny is never gated
+    return true;
+  }
+  if (!isEnter) return false; // other keys are inert while a request is up
+
+  if (isDown) {
+    if (!approveArmed) { enterSuppressed = true; return false; }
+    if (approveDanger && !approveConfirm) {
+      approveConfirm = true;  // destructive: demand a second, deliberate press
+      enterSuppressed = true;
+      return false;
+    }
+    enterSuppressed = false;
+    return true;
+  }
+  if (enterSuppressed) { enterSuppressed = false; return false; }
+  return true;
 }
 
 void scanMatrix() {
@@ -324,12 +453,13 @@ void scanMatrix() {
         if (keyState[idx]) {
           keyDownTime[idx] = millis();
           keyHoldSent[idx] = false;
-          emit(String("EVT ") + KEY_NAMES[idx] + " DOWN");
+          if (approveGate(idx, true)) emit(String("EVT ") + KEY_NAMES[idx] + " DOWN");
         } else {
-          emit(String("EVT ") + KEY_NAMES[idx] + " UP");
+          if (approveGate(idx, false)) emit(String("EVT ") + KEY_NAMES[idx] + " UP");
           // Release, not press: a tap should type once, and the host resolves
-          // tap-vs-hold on release too.
-          if (hidArmed()) Keyboard.write(HID_KEYS[idx]);
+          // tap-vs-hold on release too. Never type while a request is on
+          // screen - the deck is modal then.
+          if (!approveActive && hidArmed()) Keyboard.write(HID_KEYS[idx]);
         }
       }
       if (keyState[idx] && !keyHoldSent[idx] && millis() - keyDownTime[idx] >= HOLD_MS) {
@@ -463,7 +593,10 @@ void renderTask(void *) {
       flashNext = 0;
     }
 
-    if (millis() < toastUntil) {
+    if (approveActive) {
+      drawApprove();
+      vTaskDelay(pdMS_TO_TICKS(40));
+    } else if (millis() < toastUntil) {
       if (!toastDrawn) drawToast();
       vTaskDelay(pdMS_TO_TICKS(20));
     } else if (millis() < listUntil) {
@@ -481,8 +614,16 @@ unsigned long lastHeartbeat = 0;
 void loop() {
   int8_t dir = readRotary();
   if (dir != 0) {
-    emit(String("EVT ENCODER ") + (dir > 0 ? "+1" : "-1"));
-    if (hidArmed()) Keyboard.write(dir > 0 ? KEY_F19 : KEY_F18);
+    if (approveActive) {
+      // Reading is enforced by the interaction: a command too long to fit
+      // cannot be approved until it has been scrolled to the end.
+      int total = wrapApprove(nullptr, 16);
+      approveScroll = constrain(approveScroll + dir, 0, max(0, total - 3));
+      if (approveScroll >= total - 3) approveArmed = true;
+    } else {
+      emit(String("EVT ENCODER ") + (dir > 0 ? "+1" : "-1"));
+      if (hidArmed()) Keyboard.write(dir > 0 ? KEY_F19 : KEY_F18);
+    }
   }
 
   scanMatrix();
