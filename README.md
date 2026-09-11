@@ -52,6 +52,23 @@ stale face on screen.
 
 ---
 
+## Three tiers
+
+The deck degrades rather than dying when its daemon isn't there.
+
+| Tier | Needs | Gets |
+|---|---|---|
+| **Bare** | nothing | keys send real keystrokes — Enter, Escape, Space, F13–F19 |
+| **+ tmux** | `source-file opendeck.tmux.conf` | session switching and window cycling |
+| **Full** | the daemon | pane-level navigation, Pixie, the pane list |
+
+HID fires only while no daemon is listening, so a keypress never does two
+things. It types into the **focused window** — it cannot target a pane the way
+the daemon's `tmux send-keys` does, so the bare tier interrupts what you are
+looking at rather than a specific agent.
+
+---
+
 ## Key map
 
 ```

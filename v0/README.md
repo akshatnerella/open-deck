@@ -38,9 +38,14 @@ v0/
 2. **Wire** it up — pin map in [BOM.md](BOM.md)
 3. **Flash** the firmware:
    ```bash
-   arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32S3 firmware/open_deck
-   arduino-cli upload  --fqbn esp32:esp32:XIAO_ESP32S3 -p /dev/cu.usbmodemXXXX firmware/open_deck
+   arduino-cli compile --fqbn "esp32:esp32:XIAO_ESP32S3:USBMode=default" firmware/open_deck
+   arduino-cli upload  --fqbn "esp32:esp32:XIAO_ESP32S3:USBMode=default" -p /dev/cu.usbmodemXXXX firmware/open_deck
    ```
+
+   > **The `USBMode=default` suffix is required.** The board's default build
+   > mode (`hwcdc`) uses the hardware USB-Serial/JTAG peripheral, which cannot
+   > do HID at all. Build without it and you get a working deck with no HID and
+   > no symptom until you plug it into another machine.
 4. **Verify** the wiring before going further:
    ```bash
    arduino-cli upload --fqbn esp32:esp32:XIAO_ESP32S3 -p PORT firmware/diagnostics/i2c_scanner
@@ -144,6 +149,19 @@ Things that cost real debugging time, so you don't repeat them:
   the encoder is never sampled during a flush, and detents get *dropped* —
   which reads as inconsistency, not lag. Rendering is pinned to core 0 and
   `loop()` owns core 1. Measured: 29,500µs blind window → 390µs.
+- **`USBMode=default` renames the serial port.** TinyUSB enumerates using the
+  MAC-derived serial (`/dev/cu.usbmodemE072A1F956A82`) rather than the JTAG
+  naming (`/dev/cu.usbmodem11301`). Autodetect globs `/dev/cu.usbmodem*` so it
+  still works, but a pinned `serial_port` in `config.json` or `--port` will
+  break.
+- **The port name also differs between app mode and the ROM bootloader**, so an
+  upload can fail with a pySerial error when esptool resets the board and the
+  path moves underneath it. Re-run the upload against whatever
+  `/dev/cu.usbmodem*` is present afterwards; it succeeds on the second pass.
+- **Under TinyUSB the firmware creates the serial port**, so a build that fails
+  to bring up USB makes it vanish. Recovery: unplug, hold **BOOT**, plug in,
+  keep holding ~2s, release, then flash normally — the bootloader's port is
+  independent of the app firmware.
 - **A charge-only USB-C cable** will power the board and blink the charge LED
   while enumerating nothing. The LED tells you nothing about the data link.
 - **A status display that lies is worse than none.** Without a host keepalive
