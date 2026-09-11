@@ -26,11 +26,23 @@ class Face:
         if snapshot.state is self._state:
             return False
         self._state = snapshot.state
-        self._transport.send(f"STATE {snapshot.state}")
-        log.debug("state -> %s", snapshot.state)
+        self._transport.send(f"FACE {snapshot.state}")
+        log.debug("face -> %s", snapshot.state)
         return True
+
+    def keepalive(self) -> None:
+        """Re-send the current face unconditionally.
+
+        The device treats any received command as proof the host is alive and
+        falls back to an offline face without one. The firmware early-returns
+        on an unchanged state, so this restarts no animation.
+        """
+        self._transport.send(f"FACE {self._state or State.CALM}")
 
     def toast(self, text: str) -> None:
         text = text[:TOAST_MAX]
         log.info("toast: %s", text)
         self._transport.send(f"TOAST {text}")
+
+    def show_list(self, payload: str) -> None:
+        self._transport.send(f"LIST {payload}")

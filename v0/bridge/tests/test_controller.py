@@ -94,14 +94,14 @@ class TestAttentionAnnounce(unittest.TestCase):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        ctrl._announce_presence(Snapshot(State.ATTENTION, attention_session="api"))
+        ctrl._announce_presence(Snapshot(State.ALERT, attention_session="api"))
         self.assertIn("TOAST OWL wants you", transport.sent)
 
     def test_toasts_only_on_the_transition(self):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        snap = Snapshot(State.ATTENTION, attention_session="api")
+        snap = Snapshot(State.ALERT, attention_session="api")
         ctrl._announce_presence(snap)
         transport.sent.clear()
         ctrl._announce_presence(snap)
@@ -111,15 +111,15 @@ class TestAttentionAnnounce(unittest.TestCase):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        ctrl._announce_presence(Snapshot(State.WORKING))
+        ctrl._announce_presence(Snapshot(State.BUSY))
         self.assertEqual([m for m in transport.sent if m.startswith("TOAST")], [])
-        self.assertIn("STATE working", transport.sent)
+        self.assertIn("FACE busy", transport.sent)
 
     def test_unmapped_session_falls_back_to_its_name(self):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        ctrl._announce_presence(Snapshot(State.ATTENTION, attention_session="ghost"))
+        ctrl._announce_presence(Snapshot(State.ALERT, attention_session="ghost"))
         self.assertIn("TOAST ghost wants you", transport.sent)
 
 
@@ -137,3 +137,70 @@ class TestGestureScoping(unittest.TestCase):
         ctrl._gestures.feed(KeyEvent("KEY_AGENT1", Edge.DOWN), 0.0)
         emitted = ctrl._gestures.feed(KeyEvent("KEY_AGENT1", Edge.UP), 0.05)
         self.assertEqual(emitted, [("KEY_AGENT1", Gesture.TAP)])
+
+
+class TestPaneListGlance(unittest.TestCase):
+    def _controller(self):
+        from fakes import pane
+
+        tmux = FakeTmux(
+            sessions=["webapp"],
+            panes={"webapp": [
+                pane(index=0, command="claude", window_active=True, pane_active=True),
+                pane(index=1, command="nvim"),
+            ]},
+        )
+        transport = FakeTransport()
+        ctrl = Controller(Config(), transport, tmux, FakeTerminal())
+        ctrl.slots.refresh()
+        return ctrl, transport
+
+    def test_encoder_pushes_the_pane_list(self):
+        ctrl, transport = self._controller()
+        ctrl.handle_encoder(1)
+        lists = [m for m in transport.sent if m.startswith("LIST ")]
+        self.assertEqual(len(lists), 1)
+        self.assertIn("claude", lists[0])
+
+    def test_list_title_names_the_slot_and_session(self):
+        ctrl, transport = self._controller()
+        ctrl.handle_encoder(1)
+        title = next(m for m in transport.sent if m.startswith("LIST ")).split("|")[0]
+        self.assertIn("FOX", title)
+        self.assertIn("webapp", title)
+
+    def test_summon_pushes_the_list_not_a_toast(self):
+        ctrl, transport = self._controller()
+        ctrl._announce("summon", {"slot": 0})
+        self.assertTrue(any(m.startswith("LIST ") for m in transport.sent))
+        self.assertFalse(any(m.startswith("TOAST ") for m in transport.sent))
+
+    def test_interrupt_still_toasts(self):
+        ctrl, transport = self._controller()
+        ctrl._announce("interrupt", {"slot": 0})
+        self.assertIn("TOAST FOX interrupted", transport.sent)
+
+    def test_summon_shows_the_summoned_session_not_the_attached_one(self):
+        from fakes import pane
+
+        tmux = FakeTmux(
+            sessions=["webapp", "api"],
+            panes={
+                "webapp": [pane(index=0, command="claude", window_active=True, pane_active=True)],
+                "api": [pane(index=0, command="pytest", window_active=True, pane_active=True)],
+            },
+            client=False,
+        )
+        transport = FakeTransport()
+        ctrl = Controller(Config(), transport, tmux, FakeTerminal())
+        ctrl.slots.refresh()
+        ctrl._announce("summon", {"slot": 1})
+        payload = next(m for m in transport.sent if m.startswith("LIST "))
+        self.assertIn("api", payload)
+        self.assertIn("pytest", payload)
+        self.assertNotIn("claude", payload)
+
+    def test_summon_of_an_empty_slot_pushes_nothing(self):
+        ctrl, transport = self._controller()
+        ctrl._announce("summon", {"slot": 3})
+        self.assertEqual([m for m in transport.sent if m.startswith("LIST ")], [])

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import re
-import time
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -25,17 +24,11 @@ AGENT_COMMANDS = frozenset({"claude", "cla", "grok", "opencode", "codex", "aider
 #: current command rather than its binary name, so match that shape too.
 _VERSION_LIKE = re.compile(r"^\d+(?:\.\d+)+$")
 
-ACTIVE_LINGER = 4.0
-SLEEP_AFTER = 300.0
-
-
 class State(StrEnum):
-    IDLE = "idle"
-    WORKING = "working"
-    ATTENTION = "attention"
+    ALERT = "alert"
+    BUSY = "busy"
     DONE = "done"
-    ACTIVE = "active"
-    ASLEEP = "asleep"
+    CALM = "calm"
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,25 +58,19 @@ class PresenceMonitor:
     def __init__(self, tmux: Tmux, slots: SlotTable) -> None:
         self._tmux = tmux
         self._slots = slots
-        self._last_input = 0.0
         self._agent_seen: set[str] = set()
 
-    def note_input(self, now: float | None = None) -> None:
-        self._last_input = now if now is not None else time.monotonic()
-
     def evaluate(self, now: float | None = None) -> Snapshot:
-        now = now if now is not None else time.monotonic()
         current = self._slots.current_session()
-
         if current is None:
-            return Snapshot(State.ASLEEP)
+            return Snapshot(State.CALM)
 
         # 1. Something wants attention in a session you are not looking at.
         for session in self._slots.slots:
             if not session or session == current:
                 continue
             if any(w.activity or w.bell for w in self._tmux.windows(session)):
-                return Snapshot(State.ATTENTION, attention_session=session)
+                return Snapshot(State.ALERT, attention_session=session)
 
         panes = self._tmux.panes(current)
         agents_here = {p.target for p in panes if is_agent(p.command)}
@@ -98,17 +85,9 @@ class PresenceMonitor:
         if finished:
             return Snapshot(State.DONE)
 
-        # 3. Something is running here. DONE is tracked only for agents, but
-        #    any running program is enough to look busy.
+        # 3. Anything running here is enough to look busy; DONE is tracked
+        #    only for agents so quitting an editor does not celebrate.
         if agents_here or busy_here:
-            return Snapshot(State.WORKING)
+            return Snapshot(State.BUSY)
 
-        # 4. You just touched the deck.
-        if now - self._last_input < ACTIVE_LINGER:
-            return Snapshot(State.ACTIVE)
-
-        # 5. Nothing at all for a while.
-        if self._last_input and now - self._last_input > SLEEP_AFTER:
-            return Snapshot(State.ASLEEP)
-
-        return Snapshot(State.IDLE)
+        return Snapshot(State.CALM)
