@@ -39,6 +39,18 @@ def pane_label(pane: Pane, window: Window | None) -> str:
     return _sanitise_field(label)[:LABEL_WIDTH]
 
 
+def _is_deliberate(window: Window | None, commands: set[str]) -> bool:
+    """Whether a human chose this window's name.
+
+    tmux renames a window after whatever is running in it, so a name matching
+    any of its panes' commands tells us nothing the command does not - and for
+    a Claude Code pane it is worse, since tmux reports the version string
+    ("2.1.268") as the process name and the window inherits that. A name
+    matching none of its panes was typed by someone.
+    """
+    return window is not None and bool(window.name) and window.name not in commands
+
+
 def _flag(window: Window | None) -> str:
     return window.flag.strip() if window is not None else ""
 
@@ -59,12 +71,19 @@ def build_list(
     max_rows: int = MAX_ROWS,
 ) -> str:
     by_index = {w.index: w for w in windows}
+    commands_by_window: dict[int, set[str]] = {}
+    for p in panes:
+        commands_by_window.setdefault(p.window, set()).add(p.command)
+
     rows = []
     for pane in _window_rows(panes, max_rows):
         window = by_index.get(pane.window)
+        # The flag always comes from the real window; only the *name* is
+        # suppressed when tmux derived it rather than a human.
+        named = window if _is_deliberate(window, commands_by_window.get(pane.window, set())) else None
         marker = ">" if pane.active else " "
         flag = _flag(window)
-        row = f"{marker}{pane.index:<2}{pane_label(pane, window)}"
+        row = f"{marker}{pane.index:<2}{pane_label(pane, named)}"
         if flag:
             row = f"{row} {flag}"
         rows.append(row[:DISPLAY_WIDTH])

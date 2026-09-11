@@ -125,3 +125,57 @@ class TestBuildList(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAutoRenamedWindows(unittest.TestCase):
+    """tmux renames a window after whatever is running in it.
+
+    An auto-derived name tells us nothing the command does not, and for a
+    Claude Code pane it is actively worse - tmux reports the version string
+    ("2.1.268") as the process name, so the window inherits that too.
+    """
+
+    def test_auto_renamed_window_does_not_mask_the_agent(self):
+        panes = [pane(window=0, index=0, command="2.1.268",
+                      window_active=True, pane_active=True)]
+        windows = [window(index=0, name="2.1.268")]
+        row = build_list("t", panes, windows).split("|")[1]
+        self.assertIn("claude", row)
+        self.assertNotIn("2.1.268", row)
+
+    def test_auto_renamed_window_does_not_mask_a_plain_command(self):
+        panes = [pane(window=0, index=0, command="vim",
+                      window_active=True, pane_active=True)]
+        windows = [window(index=0, name="vim")]
+        row = build_list("t", panes, windows).split("|")[1]
+        self.assertIn("vim", row)
+
+    def test_a_human_chosen_name_still_wins(self):
+        panes = [pane(window=0, index=0, command="vim",
+                      window_active=True, pane_active=True)]
+        windows = [window(index=0, name="deploy")]
+        row = build_list("t", panes, windows).split("|")[1]
+        self.assertIn("deploy", row)
+
+    def test_split_window_name_derived_from_one_pane_is_not_deliberate(self):
+        # tmux names the window after its ACTIVE pane, so in a split the name
+        # would otherwise be stamped onto the sibling pane too.
+        panes = [
+            pane(window=0, index=0, command="2.1.268", window_active=True, pane_active=True),
+            pane(window=0, index=1, command="vim", window_active=True),
+        ]
+        windows = [window(index=0, name="2.1.268")]
+        rows = build_list("t", panes, windows).split("|")[1:]
+        self.assertIn("claude", rows[0])
+        self.assertIn("vim", rows[1])
+        self.assertNotIn("2.1.268", rows[1])
+
+    def test_human_name_applies_across_a_split(self):
+        panes = [
+            pane(window=0, index=0, command="2.1.268", window_active=True, pane_active=True),
+            pane(window=0, index=1, command="vim", window_active=True),
+        ]
+        windows = [window(index=0, name="deploy")]
+        rows = build_list("t", panes, windows).split("|")[1:]
+        self.assertIn("deploy", rows[0])
+        self.assertIn("deploy", rows[1])
