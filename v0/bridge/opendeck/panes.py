@@ -7,14 +7,13 @@ so the firmware stays a dumb renderer and all of this stays testable here.
 from __future__ import annotations
 
 from .presence import is_agent
-from .tmux import SHELLS, Pane, Window
+from .tmux import SHELLS, _GENERIC_WINDOW_NAMES, Pane, Window
 
 DISPLAY_WIDTH = 21
 MAX_ROWS = 5
 LABEL_WIDTH = 13
 EMPTY_ROW = "(empty)"
 
-_GENERIC_NAMES = frozenset({"zsh", "bash", "sh", "fish"})
 _AGENT_LABEL = "claude"
 
 
@@ -29,7 +28,7 @@ def _sanitise_line(text: str) -> str:
 
 
 def pane_label(pane: Pane, window: Window | None) -> str:
-    if window is not None and window.name and window.name not in _GENERIC_NAMES:
+    if window is not None and window.name and window.name not in _GENERIC_WINDOW_NAMES:
         label = window.name
     elif is_agent(pane.command) and pane.command not in SHELLS:
         # Claude Code reports its version string as the process name, so the
@@ -40,11 +39,8 @@ def pane_label(pane: Pane, window: Window | None) -> str:
     return _sanitise_field(label)[:LABEL_WIDTH]
 
 
-def _flag(pane: Pane, windows: list[Window]) -> str:
-    for w in windows:
-        if w.index == pane.window:
-            return w.flag.strip()
-    return ""
+def _flag(window: Window | None) -> str:
+    return window.flag.strip() if window is not None else ""
 
 
 def _window_rows(panes: list[Pane], max_rows: int) -> list[Pane]:
@@ -62,11 +58,13 @@ def build_list(
     windows: list[Window],
     max_rows: int = MAX_ROWS,
 ) -> str:
+    by_index = {w.index: w for w in windows}
     rows = []
     for pane in _window_rows(panes, max_rows):
+        window = by_index.get(pane.window)
         marker = ">" if pane.active else " "
-        flag = _flag(pane, windows)
-        row = f"{marker}{pane.index:<2}{pane_label(pane, None)}"
+        flag = _flag(window)
+        row = f"{marker}{pane.index:<2}{pane_label(pane, window)}"
         if flag:
             row = f"{row} {flag}"
         rows.append(row[:DISPLAY_WIDTH])

@@ -107,6 +107,21 @@ class TestBuildList(unittest.TestCase):
         self.assertNotIn("\n", payload)
         self.assertNotIn("\r", payload)
 
+    def test_deliberate_window_name_is_used_as_the_label(self):
+        # pane_label's rule 1 (deliberate window name wins) must fire through
+        # build_list, not just when pane_label is called directly.
+        panes = [pane(window=0, index=0, command="node", window_active=True, pane_active=True)]
+        windows = [window(index=0, name="webapp")]
+        row = build_list("t", panes, windows).split("|")[1]
+        self.assertIn("webapp", row)
+
+    def test_generic_window_name_does_not_win_over_the_running_command(self):
+        panes = [pane(window=0, index=0, command="vim", window_active=True, pane_active=True)]
+        windows = [window(index=0, name="zsh")]
+        row = build_list("t", panes, windows).split("|")[1]
+        self.assertIn("vim", row)
+        self.assertNotIn("zsh", row)
+
 
 if __name__ == "__main__":
     unittest.main()
