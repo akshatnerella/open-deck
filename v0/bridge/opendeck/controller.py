@@ -66,12 +66,6 @@ class Controller:
         except (KeyError, TypeError) as exc:
             log.error("bad binding for %s %s: %s", key, gesture, exc)
             return
-        if gesture == "tap" and key in ("KEY_ENTER", "KEY_CANCEL"):
-            # An agent stopped on a permission prompt owns these keys: the
-            # deck's whole reason for showing the request is to answer it.
-            if self._answer_approval(key == "KEY_ENTER"):
-                return
-
         log.info("%s %s -> %s", key, gesture, binding.action)
         action(self._context)
         self._announce(binding.action, binding.args)
@@ -107,34 +101,6 @@ class Controller:
         session = target.split(":")[0] if target else ""
         self._agents.record(event, target, session, payload)
         self._dirty = True
-
-    def _push_approval(self) -> None:
-        approval = self._agents.current_approval
-        if approval is None:
-            self._transport.send("APPROVE_CLEAR")
-            return
-        queued = len(self._agents.approvals)
-        self._transport.send(f"APPROVE_COUNT {queued}")
-        slot = self._slots.slot_of(approval.target.split(":")[0])
-        who = self._slots.label(slot) if slot is not None else approval.agent
-        self._transport.send(
-            f"APPROVE {who} {1 if approval.dangerous else 0} "
-            f"{approval.tool} {approval.text}"
-        )
-
-    def _answer_approval(self, approved: bool) -> bool:
-        """Answer a pending permission request. True if one was pending."""
-        approval = self._agents.current_approval
-        if approval is None:
-            return False
-        key = "Enter" if approved else "Escape"
-        self._context.tmux.send_keys(approval.target, key)
-        log.info("%s %s on %s", "approved" if approved else "denied",
-                 approval.tool, approval.target)
-        self._agents.resolve(approval.target, approved)
-        self._push_approval()
-        self._dirty = True
-        return True
 
     def _push_pane_list(self, session: str | None = None) -> None:
         session = session or self._slots.current_session()
@@ -222,7 +188,6 @@ class Controller:
             if now - last_refresh >= REFRESH_INTERVAL:
                 self._slots.refresh()
                 self._announce_presence(self._presence.evaluate(now))
-                self._push_approval()
                 self._face.keepalive()
                 last_refresh = now
 

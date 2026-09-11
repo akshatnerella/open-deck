@@ -9,9 +9,9 @@
     "Every hook is fire-and-forget with a 1s timeout and always exits 0, so a",
     "stopped daemon can never block or fail an agent turn.",
     "",
-    "Notification is what powers the approve screen. It only fires when the",
-    "harness actually asks for permission - a session launched with",
-    "--dangerously-skip-permissions never asks, so approvals stay dormant there."
+    "Notification marks an agent as waiting on you. It only fires when the",
+    "harness actually asks for something - a session launched with",
+    "--dangerously-skip-permissions never asks, so it stays dormant there."
   ],
   "hooks": {
     "SessionStart":     [{ "hooks": [{ "type": "command", "command": "HOOK_PATH SessionStart" }] }],
