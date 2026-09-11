@@ -19,9 +19,6 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 #include <FluxGarage_RoboEyes.h>
-#include <USB.h>
-#include <USBHIDKeyboard.h>
-#include "class/hid/hid_device.h"
 
 #define OLED_ADDR    0x3C
 #define SDA_PIN      D4
@@ -42,24 +39,9 @@ const char* KEY_NAMES[8] = {
   "KEY_ENTER", "KEY_CANCEL", "KEY_AGENT3", "KEY_AGENT2"
 };
 
-// Sent only when hidArmed(). Indexed identically to KEY_NAMES so the two
-// cannot drift. F13-F24 are real HID keycodes that essentially nothing binds
-// by default, so they are safe to send blind on an unknown machine: inert
-// there, bindable in .tmux.conf where the user wants more.
-const uint8_t HID_KEYS[8] = {
-  KEY_F17,       // KEY_TERM
-  ' ',           // KEY_MIC    - voice-mode toggle
-  KEY_F13,       // KEY_AGENT1
-  KEY_F16,       // KEY_AGENT4
-  KEY_RETURN,    // KEY_ENTER
-  KEY_ESC,       // KEY_CANCEL
-  KEY_F15,       // KEY_AGENT3
-  KEY_F14,       // KEY_AGENT2
-};
 
 Adafruit_SH1106G display(128, 64, &Wire, -1);
 RoboEyes<Adafruit_SH1106G> eyes(display);
-USBHIDKeyboard Keyboard;
 
 // ---------- input ----------
 bool keyState[8]    = {false};
@@ -117,14 +99,6 @@ int  sharedListCount = 0;
 
 volatile unsigned long lastHostCommand = 0;
 
-// HID fires only when no daemon is listening, so a keypress never produces two
-// actions. The thresholds are deliberately asymmetric: a machine that has never
-// seen a host is a bare machine and should get working keys quickly, while a
-// host that spoke and went quiet is probably mid-hiccup - a slow tmux call or a
-// daemon restart - and typing Escape into whatever window happens to be focused
-// would be worse than doing nothing.
-volatile bool hostEverSeen = false;
-const unsigned long HID_ARM_WARM_MS = 15000;
 const unsigned long OFFLINE_AFTER_MS = 5000;
 const unsigned long BLANK_AFTER_MS   = 15UL * 60 * 1000;
 bool offlineToastShown = false;
@@ -260,21 +234,8 @@ String nextToken(const String &s, int &pos) {
   return s.substring(start, pos);
 }
 
-bool hidArmed() {
-  // hid.ready() is tud_hid_n_ready() - a non-blocking endpoint check, and it is
-  // load-bearing. USBHIDKeyboard::write() sends two reports (press + release)
-  // and SendReport defaults to a 100ms timeout, so writing while the endpoint
-  // is not ready would stall this loop for up to 200ms per keypress. The whole
-  // reason rendering lives on the other core is that a 29.5ms stall here drops
-  // encoder detents; 200ms would be far worse.
-  if (!tud_hid_n_ready(0)) return false;
-  unsigned long since = millis() - lastHostCommand;
-  return since > (hostEverSeen ? HID_ARM_WARM_MS : OFFLINE_AFTER_MS);
-}
-
 void handleCommand(const String &line) {
   lastHostCommand = millis();
-  hostEverSeen = true;
 
   int pos = 0;
   String cmd = nextToken(line, pos);
@@ -328,9 +289,6 @@ void scanMatrix() {
           emit(String("EVT ") + KEY_NAMES[idx] + " DOWN");
         } else {
           emit(String("EVT ") + KEY_NAMES[idx] + " UP");
-          // Release, not press: a tap should type once, and the host resolves
-          // tap-vs-hold on release too.
-          if (hidArmed()) Keyboard.write(HID_KEYS[idx]);
         }
       }
       if (keyState[idx] && !keyHoldSent[idx] && millis() - keyDownTime[idx] >= HOLD_MS) {
@@ -383,9 +341,6 @@ void setup() {
   // exactly when a quiet host is expected - the daemon starts seconds after
   // the deck powers up. Seeded before the render task starts, so core 0 can
   // never observe the unset value and flash the offline face.
-  Keyboard.begin();
-  USB.begin();
-
   lastHostCommand = millis();
 
   // Arduino's loopTask runs on core 1, so rendering goes to core 0.
@@ -483,7 +438,6 @@ void loop() {
   int8_t dir = readRotary();
   if (dir != 0) {
     emit(String("EVT ENCODER ") + (dir > 0 ? "+1" : "-1"));
-    if (hidArmed()) Keyboard.write(dir > 0 ? KEY_F19 : KEY_F18);
   }
 
   scanMatrix();
