@@ -19,7 +19,7 @@ from .tmux import Tmux
 log = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Context:
     tmux: Tmux
     terminal: Terminal

@@ -1,6 +1,11 @@
 # Open Deck — Standalone Design
 
-**Status:** designed, not implemented
+**Status:** REJECTED — built, then removed. See
+[docs/decisions/no-hid.md](../../decisions/no-hid.md).
+
+> Kept for the record. The reasoning below is wrong: it treats HID's
+> inability to address a pane as a limitation to work around, when it is
+> the reason the approach cannot work.
 **Date:** 2026-09-10
 
 Makes the deck a complete control surface with no daemon, and lets the daemon

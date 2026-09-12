@@ -19,6 +19,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 #include <FluxGarage_RoboEyes.h>
+#include "class/hid/hid_device.h"
 
 #define OLED_ADDR    0x3C
 #define SDA_PIN      D4
@@ -38,6 +39,7 @@ const char* KEY_NAMES[8] = {
   "KEY_TERM",  "KEY_MIC",    "KEY_AGENT1", "KEY_AGENT4",
   "KEY_ENTER", "KEY_CANCEL", "KEY_AGENT3", "KEY_AGENT2"
 };
+
 
 
 Adafruit_SH1106G display(128, 64, &Wire, -1);
@@ -315,6 +317,7 @@ void setup() {
     digitalWrite(ROW_PINS[r], HIGH);
   }
   for (uint8_t c = 0; c < 4; c++) pinMode(COL_PINS[c], INPUT_PULLUP);
+
 
   if (!display.begin(OLED_ADDR, true)) {
     Serial.println("SH1106 init failed");

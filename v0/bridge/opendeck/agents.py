@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import StrEnum
+from .compat import StrEnum
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class Status(StrEnum):
     DONE = "done"
 
 
-@dataclass(slots=True)
+@dataclass
 class Agent:
     target: str
     session: str

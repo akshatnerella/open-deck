@@ -1,0 +1,23 @@
+#!/bin/sh
+# Run the Open Deck bridge. No install, no venv, no packages.
+#
+# The bridge is stdlib-only and targets the Python that ships with macOS, so
+# this works on a Mac that has never seen this project: clone it, run this.
+#
+# PYTHONPATH rather than cd, so relative paths in arguments still resolve
+# against the directory the user actually ran this from.
+set -e
+
+here=$(cd "$(dirname "$0")" && pwd)
+PYTHONPATH="$here/v0/bridge${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH
+
+for py in python3 /usr/bin/python3; do
+    command -v "$py" >/dev/null 2>&1 || continue
+    "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' || continue
+    exec "$py" -m opendeck "$@"
+done
+
+echo "open-deck: needs Python 3.9 or newer." >&2
+echo "macOS ships one with the Xcode command line tools: xcode-select --install" >&2
+exit 1

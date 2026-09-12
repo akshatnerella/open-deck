@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
+from typing import Union
+
+from .compat import StrEnum
 
 
 class Edge(StrEnum):
@@ -18,30 +20,30 @@ class Gesture(StrEnum):
     HOLD = "hold"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class KeyEvent:
     key: str
     edge: Edge
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class EncoderEvent:
     delta: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Heartbeat:
     uptime_ms: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Connected:
     port: str
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Disconnected:
     pass
 
 
-DeckEvent = KeyEvent | EncoderEvent | Heartbeat | Connected | Disconnected
+DeckEvent = Union[KeyEvent, EncoderEvent, Heartbeat, Connected, Disconnected]

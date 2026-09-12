@@ -71,20 +71,19 @@ class Controller:
         self._announce(binding.action, binding.args)
 
     def _announce(self, action: str, args: dict) -> None:
-        match action:
-            case "summon":
-                session = self._slots.session_for(args.get("slot", 0))
-                if session:
-                    self._push_pane_list(session)
-            case "interrupt":
-                slot = args.get("slot", 0)
-                if self._slots.session_for(slot):
-                    self._face.toast(f"{self._slots.label(slot)} interrupted")
-            case "launch_agent":
-                where = "split" if args.get("split") else "here"
-                self._face.toast(f"{self._config.launch_command} - {where}")
-            case "new_window":
-                self._face.toast("new window")
+        if action == "summon":
+            session = self._slots.session_for(args.get("slot", 0))
+            if session:
+                self._push_pane_list(session)
+        elif action == "interrupt":
+            slot = args.get("slot", 0)
+            if self._slots.session_for(slot):
+                self._face.toast(f"{self._slots.label(slot)} interrupted")
+        elif action == "launch_agent":
+            where = "split" if args.get("split") else "here"
+            self._face.toast(f"{self._config.launch_command} - {where}")
+        elif action == "new_window":
+            self._face.toast("new window")
 
     def _announce_presence(self, snapshot) -> None:
         if not self._face.apply(snapshot):
@@ -124,18 +123,15 @@ class Controller:
         self._push_pane_list()
 
     def _handle(self, event: object, now: float) -> None:
-        match event:
-            case KeyEvent():
-                for key, gesture in self._gestures.feed(event, now):
-                    self.dispatch(key, gesture)
-            case Connected(port=port):
-                log.info("deck connected on %s", port)
-                self._slots.refresh()
-                self._face.reset()
-            case Disconnected():
-                log.warning("deck disconnected")
-            case Heartbeat():
-                pass
+        if isinstance(event, KeyEvent):
+            for key, gesture in self._gestures.feed(event, now):
+                self.dispatch(key, gesture)
+        elif isinstance(event, Connected):
+            log.info("deck connected on %s", event.port)
+            self._slots.refresh()
+            self._face.reset()
+        elif isinstance(event, Disconnected):
+            log.warning("deck disconnected")
 
     def _drain(self, first: object | None) -> tuple[list[object], int]:
         """Collect everything queued, summing encoder deltas.

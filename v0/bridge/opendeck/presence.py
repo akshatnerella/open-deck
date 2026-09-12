@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from enum import StrEnum
+from .compat import StrEnum
 
 from .agents import AgentRegistry, Status
 from .slots import SlotTable
@@ -32,7 +32,7 @@ class State(StrEnum):
     CALM = "calm"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Snapshot:
     state: State
     attention_session: str | None = None

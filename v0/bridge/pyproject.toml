@@ -7,9 +7,11 @@ name = "opendeck"
 version = "0.1.0"
 description = "Host bridge for the Open Deck AI-agent control surface"
 readme = "../../README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
 license = { text = "MIT" }
-dependencies = ["pyserial>=3.5"]
+# No dependencies, on purpose: the deck must run on a Mac with
+# nothing installed. See v0/bridge/opendeck/serialport.py.
+dependencies = []
 
 [project.scripts]
 opendeck = "opendeck.cli:main"
@@ -19,7 +21,7 @@ packages = ["opendeck"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]

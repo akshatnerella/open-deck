@@ -15,7 +15,7 @@ SLOT_LABELS = ("FOX", "OWL", "CAT", "PNDA")
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "opendeck" / "config.json"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Binding:
     """An action name plus its keyword arguments, resolved by the registry."""
 

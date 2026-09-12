@@ -32,7 +32,7 @@ _WINDOW_FORMAT = (
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Window:
     index: int
     name: str
@@ -54,7 +54,7 @@ class Window:
         return "*" if self.activity else " "
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Pane:
     """One terminal, addressed as ``window.pane``.
 
@@ -77,7 +77,7 @@ class Pane:
         return self.window_active and self.pane_active
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Session:
     name: str
     windows: int

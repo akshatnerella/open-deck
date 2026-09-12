@@ -38,39 +38,37 @@ v0/
 2. **Wire** it up — pin map in [BOM.md](BOM.md)
 3. **Flash** the firmware:
    ```bash
-   arduino-cli compile --fqbn "esp32:esp32:XIAO_ESP32S3:USBMode=default" firmware/open_deck
-   arduino-cli upload  --fqbn "esp32:esp32:XIAO_ESP32S3:USBMode=default" -p /dev/cu.usbmodemXXXX firmware/open_deck
+   arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32S3 firmware/open_deck
+   arduino-cli upload  --fqbn esp32:esp32:XIAO_ESP32S3 -p /dev/cu.usbmodemXXXX firmware/open_deck
    ```
 
-   > **The `USBMode=default` suffix is required.** The board's default build
-   > mode (`hwcdc`) uses the hardware USB-Serial/JTAG peripheral, which cannot
-   > do HID at all. Build without it and you get a working deck with no HID and
-   > no symptom until you plug it into another machine.
+   > Build with the board's default USB mode (`hwcdc`). It uses the hardware
+   > USB-Serial/JTAG peripheral, so the port exists whatever the firmware does
+   > — a bad flash can always be recovered with another flash.
 4. **Verify** the wiring before going further:
    ```bash
    arduino-cli upload --fqbn esp32:esp32:XIAO_ESP32S3 -p PORT firmware/diagnostics/i2c_scanner
    ```
    The OLED must appear at `0x3C`. If nothing shows up, it's the wiring or a
    charge-only USB cable — not the code.
-5. **Install the daemon** (Python 3.11+):
+5. **Run the bridge.** There is no install step — it is stdlib-only and runs
+   on the Python macOS ships:
    ```bash
-   python3 -m venv .venv && .venv/bin/pip install pyserial
-   ```
-6. **Run**:
-   ```bash
-   cd bridge && ../.venv/bin/python -m opendeck --command cla
+   ./open-deck --command cla
    ```
 
 No hooks, no `settings.json` edits — everything is read from tmux. Run your
 agents under `tmux` and the deck picks them up automatically.
 
-7. **Optionally run it at login**:
+6. **Optionally run it at login**:
    ```bash
-   ./scripts/install-service.sh cla
+   ./scripts/autostart install     # uninstall / status also work
    ```
-   Installs a launchd agent that restarts on crash. Logs to
-   `~/Library/Logs/opendeck.log`; the script prints the stop/uninstall
-   commands.
+   Installs a launchd agent that restarts on crash and logs to
+   `~/Library/Logs/opendeck.log`. It copies the bridge to
+   `~/Library/Application Support/OpenDeck` — macOS blocks launchd agents from
+   reading `~/Documents`, so pointing one at a checkout there fails. Re-run
+   after pulling.
 
 Optional config at `~/.config/opendeck/config.json`:
 
@@ -103,11 +101,13 @@ same serial stream — useful for telling "the display is slow" apart from
 "the firmware is slow".
 
 ```bash
-../.venv/bin/python tools/serial_mirror_gui.py
+python3 tools/serial_mirror_gui.py
 ```
 
-> On macOS this needs a real Tk. Apple's bundled Tcl/Tk 8.5.9 renders a blank
-> window. `brew install python-tk@3.13` and use that interpreter.
+> The bridge itself needs nothing, but this tool is the exception: it needs
+> `pyserial` and a real Tk. Apple's bundled Tcl/Tk 8.5.9 renders a blank
+> window. `brew install python-tk@3.13`, `pip install pyserial`, and use that
+> interpreter.
 
 ---
 
@@ -149,19 +149,12 @@ Things that cost real debugging time, so you don't repeat them:
   the encoder is never sampled during a flush, and detents get *dropped* —
   which reads as inconsistency, not lag. Rendering is pinned to core 0 and
   `loop()` owns core 1. Measured: 29,500µs blind window → 390µs.
-- **`USBMode=default` renames the serial port.** TinyUSB enumerates using the
-  MAC-derived serial (`/dev/cu.usbmodemE072A1F956A82`) rather than the JTAG
-  naming (`/dev/cu.usbmodem11301`). Autodetect globs `/dev/cu.usbmodem*` so it
-  still works, but a pinned `serial_port` in `config.json` or `--port` will
-  break.
-- **The port name also differs between app mode and the ROM bootloader**, so an
-  upload can fail with a pySerial error when esptool resets the board and the
-  path moves underneath it. Re-run the upload against whatever
-  `/dev/cu.usbmodem*` is present afterwards; it succeeds on the second pass.
-- **Under TinyUSB the firmware creates the serial port**, so a build that fails
-  to bring up USB makes it vanish. Recovery: unplug, hold **BOOT**, plug in,
-  keep holding ~2s, release, then flash normally — the bootloader's port is
-  independent of the app firmware.
+- **Stay on the default `hwcdc` USB mode.** It was briefly built as
+  `USBMode=default` (TinyUSB) to get HID, which cost three separate hazards:
+  the port renamed between app and bootloader so uploads failed on the first
+  pass, and a firmware that failed to bring up USB made its own port vanish.
+  Under `hwcdc` the port is dedicated silicon and exists whatever the firmware
+  does, so a bad flash is always recoverable with another flash.
 - **A charge-only USB-C cable** will power the board and blink the charge LED
   while enumerating nothing. The LED tells you nothing about the data link.
 - **A status display that lies is worse than none.** Without a host keepalive

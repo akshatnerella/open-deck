@@ -1,0 +1,113 @@
+#!/bin/sh
+# Install or remove a launchd agent that keeps the bridge running.
+#
+# The bridge already reconnects on its own when the deck appears or goes away,
+# so the agent just keeps it alive from login.
+#
+# Install copies the bridge to ~/Library/Application Support/OpenDeck rather
+# than pointing at this checkout. That is not tidiness: macOS blocks
+# launchd-spawned processes from reading ~/Documents, ~/Desktop and ~/Downloads
+# (TCC), so an agent aimed at a checkout in any of them dies with "Operation
+# not permitted". Copying also means moving or deleting the checkout cannot
+# silently break autostart. Re-run install after pulling changes.
+#
+#   scripts/autostart install
+#   scripts/autostart uninstall
+#   scripts/autostart status
+set -e
+
+LABEL="com.opendeck.bridge"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+STAGE="$HOME/Library/Application Support/OpenDeck"
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+LOG="$HOME/Library/Logs/opendeck.log"
+
+find_python() {
+    for py in /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
+        [ -x "$py" ] || continue
+        "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' \
+            2>/dev/null || continue
+        echo "$py"
+        return 0
+    done
+    return 1
+}
+
+case "${1:-}" in
+install)
+    PY=$(find_python) || {
+        echo "autostart: needs Python 3.9+ (xcode-select --install)" >&2
+        exit 1
+    }
+    # launchd hands an agent a bare PATH (/usr/bin:/bin:/usr/sbin:/sbin), which
+    # does not include Homebrew - where tmux lives on most Macs. Bake in the
+    # PATH from the shell doing the install, plus both Homebrew prefixes.
+    AGENT_PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+
+    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$STAGE"
+    rm -rf "$STAGE/opendeck"
+    cp -R "$ROOT/v0/bridge/opendeck" "$STAGE/opendeck"
+    find "$STAGE/opendeck" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+
+    cat >"$PLIST" <<PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$LABEL</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$PY</string>
+        <string>-m</string>
+        <string>opendeck</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$STAGE</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>$STAGE</string>
+        <key>PATH</key>
+        <string>$AGENT_PATH</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    <key>StandardOutPath</key>
+    <string>$LOG</string>
+    <key>StandardErrorPath</key>
+    <string>$LOG</string>
+</dict>
+</plist>
+PLIST_EOF
+
+    # bootout first so install is repeatable after a pull.
+    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$PLIST"
+    echo "installed: $PLIST"
+    echo "staged:    $STAGE/opendeck"
+    echo "logs:      $LOG"
+    ;;
+uninstall)
+    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+    rm -f "$PLIST"
+    rm -rf "$STAGE"
+    echo "removed: $PLIST"
+    ;;
+status)
+    if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
+        echo "running"
+    else
+        echo "not running"
+    fi
+    ;;
+*)
+    echo "usage: $(basename "$0") {install|uninstall|status}" >&2
+    exit 2
+    ;;
+esac

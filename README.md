@@ -52,20 +52,22 @@ stale face on screen.
 
 ---
 
-## Three tiers
+## Running it
 
-The deck degrades rather than dying when its daemon isn't there.
+The deck talks to a small host bridge over USB serial. The bridge has **no
+dependencies** — stdlib only, and it runs on the Python that ships with macOS:
 
-| Tier | Needs | Gets |
-|---|---|---|
-| **Bare** | nothing | keys send real keystrokes — Enter, Escape, Space, F13–F19 |
-| **+ tmux** | `source-file opendeck.tmux.conf` | session switching and window cycling |
-| **Full** | the daemon | pane-level navigation, Pixie, the pane list |
+```bash
+./open-deck                  # that is the whole install
+./scripts/autostart install  # or have it start at login
+```
 
-HID fires only while no daemon is listening, so a keypress never does two
-things. It types into the **focused window** — it cannot target a pane the way
-the daemon's `tmux send-keys` does, so the bare tier interrupts what you are
-looking at rather than a specific agent.
+**The deck is not a keyboard and never types.** It sends events; the bridge
+decides what they mean and drives tmux with `send-keys`, which names the pane
+it is talking to. A keyboard cannot do that — it can only type into whatever
+happens to have focus. That difference is the product, so it is worth being
+plain about the trade: the deck does nothing at all until the bridge is
+running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
 
 ---
 

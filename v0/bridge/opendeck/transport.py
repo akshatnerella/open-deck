@@ -13,13 +13,11 @@ import re
 import threading
 import time
 
-import serial
-
 from .events import Connected, DeckEvent, Disconnected, Edge, EncoderEvent, Heartbeat, KeyEvent
+from .serialport import BAUD, SerialPort
 
 log = logging.getLogger(__name__)
 
-BAUD = 115200
 PORT_GLOBS = ("/dev/cu.usbmodem*", "/dev/ttyACM*", "/dev/ttyUSB*")
 
 _KEY = re.compile(r"^EVT\s+(KEY_\w+)\s+(DOWN|HOLD|UP)$")
@@ -51,7 +49,7 @@ class SerialTransport:
     def __init__(self, port: str | None = None, reconnect_delay: float = 1.0) -> None:
         self._port = port
         self._reconnect_delay = reconnect_delay
-        self._serial: serial.Serial | None = None
+        self._serial: SerialPort | None = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._write_lock = threading.Lock()
@@ -78,9 +76,9 @@ class SerialTransport:
             if not self.connected:
                 return False
             try:
-                self._serial.write(f"{line}\n".encode())
+                self._serial.write_line(line)
                 return True
-            except (serial.SerialException, OSError):
+            except OSError:
                 return False
 
     def _run(self) -> None:
@@ -91,7 +89,7 @@ class SerialTransport:
                 continue
             try:
                 self._read_forever(port)
-            except (serial.SerialException, OSError) as exc:
+            except OSError as exc:
                 log.warning("serial error on %s: %s", port, exc)
             finally:
                 self._serial = None
@@ -100,12 +98,12 @@ class SerialTransport:
                     time.sleep(self._reconnect_delay)
 
     def _read_forever(self, port: str) -> None:
-        with serial.Serial(port, BAUD, timeout=0.4) as conn:
+        with SerialPort(port, BAUD) as conn:
             self._serial = conn
             log.info("connected to %s", port)
             self.events.put(Connected(port=port))
             while not self._stop.is_set():
-                raw = conn.readline()
+                raw = conn.readline(timeout=0.4)
                 if not raw:
                     continue
                 line = raw.decode(errors="replace").strip()

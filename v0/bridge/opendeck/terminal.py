@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 TIMEOUT = 10.0
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class TerminalApp:
     name: str
     path: str
