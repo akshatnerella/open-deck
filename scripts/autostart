@@ -22,6 +22,17 @@ STAGE="$HOME/Library/Application Support/OpenDeck"
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 LOG="$HOME/Library/Logs/opendeck.log"
 
+# Stop a job and wait for launchd to finish unloading it.
+unload() {
+    launchctl bootout "gui/$(id -u)/$1" 2>/dev/null || true
+    n=0
+    while launchctl print "gui/$(id -u)/$1" >/dev/null 2>&1; do
+        n=$((n + 1))
+        [ "$n" -gt 50 ] && break   # 5s; let bootstrap report the real error
+        sleep 0.1
+    done
+}
+
 find_python() {
     for py in /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
         [ -x "$py" ] || continue
@@ -86,15 +97,17 @@ install)
 </plist>
 PLIST_EOF
 
-    # bootout first so install is repeatable after a pull.
-    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+    # bootout first so install is repeatable after a pull. bootout is
+    # asynchronous: bootstrapping while the old job is still tearing down
+    # fails with "Input/output error", so wait for it to actually go.
+    unload "$LABEL"
     launchctl bootstrap "gui/$(id -u)" "$PLIST"
     echo "installed: $PLIST"
     echo "staged:    $STAGE/opendeck"
     echo "logs:      $LOG"
     ;;
 uninstall)
-    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+    unload "$LABEL"
     rm -f "$PLIST"
     rm -rf "$STAGE"
     echo "removed: $PLIST"

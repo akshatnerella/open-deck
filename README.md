@@ -81,7 +81,7 @@ running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
 | Key | Tap | Double-tap | Hold |
 |---|---|---|---|
 | **TERM** | launch the agent here | launch in a split | new window |
-| **MIC** | Space — voice-mode toggle | | |
+| **MIC** | voice-mode toggle — Space, or `C-Space` on grok | | |
 | **X** | interrupt, or close an idle pane | | |
 | **ENTER** | Enter | | |
 | **FOX OWL CAT PANDA** | summon that session fullscreen | | interrupt it in place |

@@ -20,7 +20,7 @@ HB <uptime_ms>
 | Name | Position | Bound to |
 |---|---|---|
 | `KEY_TERM` | R1C1 | launch agent / split / new window |
-| `KEY_MIC` | R1C2 | Space (voice toggle) |
+| `KEY_MIC` | R1C2 | voice toggle (Space; `C-Space` on grok) |
 | `KEY_AGENT1` | R1C3 | Fox |
 | `KEY_AGENT4` | R1C4 | Panda |
 | `KEY_ENTER` | R2C1 | Enter |

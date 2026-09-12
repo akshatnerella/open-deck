@@ -30,6 +30,17 @@
       "hold": {
         "type": "none"
       }
+    },
+    "KEY_MIC": {
+      "tap": {
+        "type": "keystroke",
+        "keys": [
+          "C-Space"
+        ]
+      },
+      "hold": {
+        "type": "none"
+      }
     }
   },
   "palette": [
@@ -41,8 +52,9 @@
   "_bridge_handled": [
     "KEY_AGENT1-4: tap = summon that tmux session fullscreen, hold = interrupt it",
     "KEY_TERM: tap = launch launch_command here, double-tap = launch in a split, hold = new window",
-    "KEY_MIC: tap = send Space (voice-mode toggle in the chat prompt)",
+    "KEY_MIC: tap = send C-Space (grok's voice toggle; plain Space elsewhere)",
     "KEY_CANCEL: tap = send Escape (deny prompt / interrupt)",
     "KEY_ENTER: approve when a request is pending, hold = sessions overview"
-  ]
+  ],
+  "_launch_note": "Voice is Ctrl+Space in grok, not Space. Set it with a bindings override in ~/.config/opendeck/config.json:\n{\"bindings\": {\"KEY_MIC\": {\"tap\": {\"action\": \"send_keys\", \"keys\": [\"C-Space\"]}}}}"
 }
