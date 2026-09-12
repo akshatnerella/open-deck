@@ -19,7 +19,7 @@ log = logging.getLogger("opendeck")
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="opendeck", description="Open Deck host bridge")
     parser.add_argument("-c", "--config", type=Path, help="path to config.json")
-    parser.add_argument("--command", help="agent command to launch (e.g. 'cla')")
+    parser.add_argument("--command", help="agent command to launch (e.g. 'grok')")
     parser.add_argument("--port", help="serial port (default: autodetect)")
     parser.add_argument("--terminal", help="terminal app name (default: autodetect)")
     parser.add_argument(

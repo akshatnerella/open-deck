@@ -54,7 +54,7 @@ v0/
 5. **Run the bridge.** There is no install step — it is stdlib-only and runs
    on the Python macOS ships:
    ```bash
-   ./open-deck --command cla
+   ./open-deck --command grok
    ```
 
 No hooks, no `settings.json` edits — everything is read from tmux. Run your
@@ -74,7 +74,7 @@ Optional config at `~/.config/opendeck/config.json`:
 
 ```json
 {
-  "launch_command": "cla",
+  "launch_command": "grok",
   "sessions": ["webapp", "api", null, null],
   "encoder_scope": "session"
 }

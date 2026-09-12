@@ -102,7 +102,7 @@ idle shell.
 
 **Approvals.** A physical approve/deny button for agent permission prompts was
 designed and built, then removed: it depends on the harness *asking*, and the
-day-to-day launch command here is `cla` — `claude --dangerously-skip-permissions`.
+day-to-day launch command here is `grok`, which does not gate tool use.
 The two are mutually exclusive by construction. The design notes are in git
 history if that changes.
 
