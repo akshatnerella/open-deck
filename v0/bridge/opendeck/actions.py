@@ -40,8 +40,11 @@ def summon(slot: int) -> Action:
     def run(ctx: Context) -> None:
         session = ctx.slots.session_for(slot)
         if session is None:
-            session = ctx.slots.create_for(slot)
-            if session is None:
+            return
+        # A key always means the same session; it just might not exist yet.
+        # Creating it here is what makes an unused key still do something.
+        if not ctx.slots.exists(slot):
+            if ctx.slots.create_for(slot) is None:
                 return
         log.info("summon %s (%s)", ctx.slots.label(slot), session)
         if ctx.tmux.has_client():
@@ -58,7 +61,9 @@ def interrupt(slot: int) -> Action:
 
     def run(ctx: Context) -> None:
         session = ctx.slots.session_for(slot)
-        if session is None:
+        # Unlike summon, this must not create: interrupting a session that
+        # does not exist should do nothing, not conjure one.
+        if session is None or not ctx.slots.exists(slot):
             return
         log.info("interrupt %s (%s)", ctx.slots.label(slot), session)
         ctx.tmux.send_keys(session, "Escape")

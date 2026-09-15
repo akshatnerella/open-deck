@@ -69,15 +69,21 @@ class Controller:
         log.info("%s %s -> %s", key, gesture, binding.action)
         action(self._context)
         self._announce(binding.action, binding.args)
+        # Acting changes the fleet, so repaint the strip now rather than
+        # leaving it stale until the next refresh tick.
+        self._slots.refresh()
+        self._face.show_slots(self._slots.strip())
 
     def _announce(self, action: str, args: dict) -> None:
         if action == "summon":
-            session = self._slots.session_for(args.get("slot", 0))
-            if session:
-                self._push_pane_list(session)
+            slot = args.get("slot", 0)
+            # A key always names a session now, so "does it exist" is the
+            # question, not "is it bound".
+            if self._slots.exists(slot):
+                self._push_pane_list(self._slots.session_for(slot))
         elif action == "interrupt":
             slot = args.get("slot", 0)
-            if self._slots.session_for(slot):
+            if self._slots.exists(slot):
                 self._face.toast(f"{self._slots.label(slot)} interrupted")
         elif action == "launch_agent":
             where = "split" if args.get("split") else "here"
@@ -184,6 +190,7 @@ class Controller:
             if now - last_refresh >= REFRESH_INTERVAL:
                 self._slots.refresh()
                 self._announce_presence(self._presence.evaluate(now))
+                self._face.show_slots(self._slots.strip())
                 self._face.keepalive()
                 last_refresh = now
 

@@ -1,108 +1,143 @@
 import unittest
 
+from opendeck.slots import SlotTable, SlotState
+from opendeck.tmux import Session, Window
+
 from fakes import FakeTmux
-from opendeck.slots import SlotTable
 
 
-class TestSlotTable(unittest.TestCase):
-    def test_sessions_fill_slots_in_discovery_order(self):
-        table = SlotTable(FakeTmux(sessions=["webapp", "api", "notes"]))
-        table.refresh()
-        self.assertEqual(table.slots, ("webapp", "api", "notes", None))
+def window(index=0, command="zsh", name="", active=True, activity=False, bell=False):
+    return Window(index=index, name=name, command=command, active=active,
+                  activity=activity, bell=bell)
 
-    def test_only_four_sessions_get_slots(self):
-        table = SlotTable(FakeTmux(sessions=list("abcde")))
-        table.refresh()
-        self.assertEqual(table.slots, ("a", "b", "c", "d"))
 
-    def test_assignment_is_stable_across_refreshes(self):
-        tmux = FakeTmux(sessions=["webapp", "api"])
-        table = SlotTable(tmux)
-        table.refresh()
-        table.refresh()
-        self.assertEqual(table.slots[:2], ("webapp", "api"))
+class TestFixedBinding(unittest.TestCase):
+    """A key means one session, always. Nothing is discovered."""
 
-    def test_slot_is_released_when_its_session_disappears(self):
-        tmux = FakeTmux(sessions=["webapp", "api"])
-        table = SlotTable(tmux)
-        table.refresh()
-        tmux._sessions = [s for s in tmux._sessions if s.name != "webapp"]
-        table.refresh()
-        self.assertIsNone(table.slots[0])
+    def test_slots_default_to_the_lowercased_labels(self):
+        table = SlotTable(FakeTmux())
+        self.assertEqual(table.slots, ("fox", "owl", "cat", "pnda"))
 
-    def test_a_freed_slot_is_reused(self):
-        tmux = FakeTmux(sessions=["webapp", "api"])
-        table = SlotTable(tmux)
+    def test_a_key_means_its_session_even_before_it_exists(self):
+        # The whole point: an unused key still does something when pressed.
+        table = SlotTable(FakeTmux(sessions=[]))
         table.refresh()
-        tmux._sessions = [s for s in tmux._sessions if s.name != "webapp"]
-        table.refresh()
-        from opendeck.tmux import Session
-        tmux._sessions.append(Session("newproj", 1, False))
-        table.refresh()
-        self.assertEqual(table.slots[0], "newproj")
+        self.assertEqual(table.session_for(0), "fox")
+        self.assertFalse(table.exists(0))
 
-    def test_pinned_sessions_keep_their_slot_even_when_absent(self):
-        table = SlotTable(FakeTmux(sessions=["other"]), pinned=("webapp", None, None, None))
+    def test_unrelated_sessions_never_take_a_slot(self):
+        # Old behaviour vacuumed any session into the first free slot, so a
+        # key's meaning depended on what you had started that morning.
+        table = SlotTable(FakeTmux(sessions=["webapp", "api", "scratch"]))
         table.refresh()
-        self.assertEqual(table.slots[0], "webapp")
-        self.assertEqual(table.slots[1], "other")
+        self.assertEqual(table.slots, ("fox", "owl", "cat", "pnda"))
+        self.assertIsNone(table.slot_of("webapp"))
+
+    def test_configured_names_override_the_defaults(self):
+        table = SlotTable(FakeTmux(), pinned=("webapp", None, "api", None))
+        self.assertEqual(table.slots, ("webapp", "owl", "api", "pnda"))
 
     def test_slot_lookup_round_trips(self):
-        table = SlotTable(FakeTmux(sessions=["webapp", "api"]))
-        table.refresh()
-        self.assertEqual(table.slot_of("api"), 1)
-        self.assertIsNone(table.slot_of("missing"))
-        self.assertIsNone(table.slot_of(None))
-
-    def test_labels(self):
         table = SlotTable(FakeTmux())
-        self.assertEqual(table.label(0), "FOX")
-        self.assertEqual(table.label(3), "PNDA")
-        self.assertEqual(table.label(9), "--")
+        self.assertEqual(table.slot_of("cat"), 2)
+        self.assertIsNone(table.slot_of("nothing"))
 
-    def test_current_session_prefers_the_attached_one(self):
-        table = SlotTable(FakeTmux(sessions=["webapp", "api"]))
+    def test_binding_survives_a_session_disappearing(self):
+        table = SlotTable(FakeTmux(sessions=["fox"]))
         table.refresh()
-        self.assertEqual(table.current_session(), "webapp")
+        self.assertTrue(table.exists(0))
 
-    def test_current_session_falls_back_to_the_first_slot(self):
-        table = SlotTable(FakeTmux(sessions=["webapp"], client=False))
+        table._tmux._sessions = []
         table.refresh()
-        self.assertEqual(table.current_session(), "webapp")
+        self.assertFalse(table.exists(0))
+        self.assertEqual(table.session_for(0), "fox")   # still means fox
 
-    def test_out_of_range_slot_is_none(self):
-        table = SlotTable(FakeTmux(sessions=["webapp"]))
+
+class TestCreate(unittest.TestCase):
+    def test_creates_the_session_named_after_the_key(self):
+        tmux = FakeTmux(sessions=[])
+        table = SlotTable(tmux)
         table.refresh()
-        self.assertIsNone(table.session_for(7))
+        self.assertEqual(table.create_for(1), "owl")
+        self.assertIn(("new_session", "owl"), tmux.calls)
+
+    def test_existing_session_is_returned_without_recreating(self):
+        tmux = FakeTmux(sessions=["fox"])
+        table = SlotTable(tmux)
+        table.refresh()
+        self.assertEqual(table.create_for(0), "fox")
+        self.assertNotIn(("new_session", "fox"), tmux.calls)
+
+    def test_out_of_range_slot_is_a_noop(self):
+        table = SlotTable(FakeTmux())
+        self.assertIsNone(table.create_for(9))
+
+
+class TestStrip(unittest.TestCase):
+    """The four characters the deck draws under Pixie."""
+
+    def test_missing_session_reads_empty(self):
+        table = SlotTable(FakeTmux(sessions=[]))
+        table.refresh()
+        self.assertEqual(table.state_of(0), SlotState.EMPTY)
+
+    def test_a_shell_reads_idle(self):
+        table = SlotTable(FakeTmux(sessions=["fox"], panes={"fox": []}))
+        table.refresh()
+        self.assertEqual(table.state_of(0), SlotState.IDLE)
+
+    def test_a_running_program_reads_working(self):
+        tmux = FakeTmux(sessions=["fox"])
+        tmux._panes = {"fox": [type("P", (), {"command": "grok"})()]}
+        table = SlotTable(tmux)
+        table.refresh()
+        self.assertEqual(table.state_of(0), SlotState.WORKING)
+
+    def test_a_bell_reads_attention(self):
+        tmux = FakeTmux(sessions=["fox"], windows={"fox": [window(bell=True)]})
+        table = SlotTable(tmux)
+        table.refresh()
+        self.assertEqual(table.state_of(0), SlotState.ATTENTION)
+
+    def test_attention_outranks_working(self):
+        tmux = FakeTmux(sessions=["fox"], windows={"fox": [window(bell=True)]})
+        tmux._panes = {"fox": [type("P", (), {"command": "grok"})()]}
+        table = SlotTable(tmux)
+        table.refresh()
+        self.assertEqual(table.state_of(0), SlotState.ATTENTION)
+
+    def test_activity_in_the_session_you_are_watching_is_not_attention(self):
+        # You are looking at it, so it is not news.
+        tmux = FakeTmux(sessions=["fox"], windows={"fox": [window(activity=True)]},
+                        client=True)
+        table = SlotTable(tmux)
+        table.refresh()
+        self.assertEqual(table.state_of(0), SlotState.IDLE)
+
+    def test_strip_is_four_characters(self):
+        table = SlotTable(FakeTmux(sessions=["fox", "cat"]))
+        table.refresh()
+        strip = table.strip()
+        self.assertEqual(len(strip), 4)
+        self.assertEqual(strip[1], SlotState.EMPTY)   # owl does not exist
+
+
+class TestCurrentSession(unittest.TestCase):
+    def test_prefers_the_attached_session(self):
+        table = SlotTable(FakeTmux(sessions=["fox", "owl"], client=True))
+        table.refresh()
+        self.assertEqual(table.current_session(), "fox")
+
+    def test_falls_back_to_the_first_live_slot(self):
+        table = SlotTable(FakeTmux(sessions=["cat"], client=False))
+        table.refresh()
+        self.assertEqual(table.current_session(), "cat")
+
+    def test_none_when_nothing_is_running(self):
+        table = SlotTable(FakeTmux(sessions=[], client=False))
+        table.refresh()
+        self.assertIsNone(table.current_session())
 
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class TestCreateForSlot(unittest.TestCase):
-    def test_creates_a_session_named_after_the_key(self):
-        tmux = FakeTmux(sessions=[])
-        table = SlotTable(tmux)
-        table.refresh()
-        self.assertEqual(table.create_for(0), "fox")
-        self.assertEqual(table.slots[0], "fox")
-
-    def test_returns_the_existing_session_for_an_occupied_slot(self):
-        tmux = FakeTmux(sessions=["webapp"])
-        table = SlotTable(tmux)
-        table.refresh()
-        self.assertEqual(table.create_for(0), "webapp")
-        self.assertNotIn(("new_session", "fox"), tmux.calls)
-
-    def test_new_session_survives_a_refresh(self):
-        tmux = FakeTmux(sessions=["webapp"])
-        table = SlotTable(tmux)
-        table.refresh()
-        table.create_for(2)
-        table.refresh()
-        self.assertEqual(table.slots[2], "cat")
-
-    def test_out_of_range_slot_is_none(self):
-        table = SlotTable(FakeTmux(sessions=[]))
-        self.assertIsNone(table.create_for(9))

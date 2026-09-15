@@ -41,6 +41,7 @@ window. One physical press yields exactly one action.
 FACE <alert|busy|done|calm>
 TOAST <text>
 LIST <title>|<row>|<row>|...
+SLOTS <4 chars>
 ```
 
 `FACE` sets Pixie's expression, one of four wire states. The old
@@ -56,6 +57,22 @@ just brought into view — a title row plus up to five pane rows — held for
 1.2s, then decaying back to the face. Summon sends `LIST` too, in place of a
 toast, because naming the destination and showing its contents in one shot is
 strictly more useful than a line of text.
+
+`SLOTS` carries one status character per key, in slot order — the strip drawn
+under Pixie on the home screen. It is the only message that describes all four
+projects at once, and the only one that is permanently on screen rather than
+decaying back to the face.
+
+| Char | Meaning |
+|---|---|
+| (space) | no session yet — pressing the key creates one |
+| `.` | idle: a shell, nothing running |
+| `@` | working: something is running |
+| `!` | needs you: a bell, or activity where you are not looking |
+
+Sent only when it changes. The device redraws the strip from its own copy every
+frame, so re-sending an identical line costs serial bandwidth that key events
+need and buys nothing.
 
 `LIST` travels as **one line**, never a begin/item/end sequence. A multi-line
 render can be interrupted mid-draw by whatever the host sends next, leaving a

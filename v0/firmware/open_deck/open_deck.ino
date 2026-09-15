@@ -14,12 +14,12 @@
 //   FACE <alert|busy|done|calm>
 //   TOAST <text>
 //   LIST <title>|<row>|...
+//   SLOTS <4 chars>   ' '=empty  '.'=idle  '@'=working  '!'=needs you  '*'=done
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
-#include <FluxGarage_RoboEyes.h>
-#include "class/hid/hid_device.h"
+#include "pixie_eyes.h"
 
 #define OLED_ADDR    0x3C
 #define SDA_PIN      D4
@@ -101,10 +101,50 @@ int  sharedListCount = 0;
 
 volatile unsigned long lastHostCommand = 0;
 
+// The slot strip: four projects, four states, readable across a desk. This is
+// the one thing on screen that says *which* agent wants you - the face only
+// says whether any of them does.
+const char *SLOT_LABELS[4] = { "FOX", "OWL", "CAT", "PNDA" };
+const uint8_t STRIP_TOP    = 52;          // rows 52..63; the face owns 0..51
+volatile char sharedSlots[4] = { ' ', ' ', ' ', ' ' };
+char slotStatus[4]           = { ' ', ' ', ' ', ' ' };
+
 const unsigned long OFFLINE_AFTER_MS = 5000;
 const unsigned long BLANK_AFTER_MS   = 15UL * 60 * 1000;
 bool offlineToastShown = false;
 bool panelBlanked = false;
+
+// Drawn into the same framebuffer as the face, immediately before the single
+// flush, so it never blinks.
+void drawSlotStrip() {
+  display.drawFastHLine(0, STRIP_TOP - 2, 128, SH110X_WHITE);
+
+  for (uint8_t i = 0; i < 4; i++) {
+    int16_t x = i * 32;
+    char st = slotStatus[i];
+
+    // An empty slot is drawn dim rather than hidden: a key that does nothing
+    // yet should still look like a key, not a gap.
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(x + 2, STRIP_TOP + 2);
+    display.print(SLOT_LABELS[i]);
+
+    if (st == '@') {
+      // Working: a filled block that grows, so "busy" reads without colour.
+      uint8_t w = 3 + ((millis() / 150) % 4);
+      display.fillRect(x + 24, STRIP_TOP + 3, w, 5, SH110X_WHITE);
+    } else if (st == '!') {
+      display.fillRect(x + 25, STRIP_TOP + 1, 3, 6, SH110X_WHITE);
+      display.fillRect(x + 25, STRIP_TOP + 8, 3, 2, SH110X_WHITE);
+    } else if (st == '*') {
+      display.fillCircle(x + 26, STRIP_TOP + 5, 3, SH110X_WHITE);
+    } else if (st == '.') {
+      display.drawPixel(x + 26, STRIP_TOP + 6, SH110X_WHITE);
+      display.drawPixel(x + 27, STRIP_TOP + 6, SH110X_WHITE);
+    }
+  }
+}
 
 void emit(const String &line) {
   // ESP32-S3 native USB CDC blocks once its TX ring fills with no host
@@ -247,6 +287,13 @@ void handleCommand(const String &line) {
   } else if (cmd == "TOAST") {
     while (pos < (int)line.length() && line[pos] == ' ') pos++;
     showToast(line.substring(pos));
+  } else if (cmd == "SLOTS") {
+    String codes = nextToken(line, pos);
+    portENTER_CRITICAL(&faceMux);
+    for (uint8_t i = 0; i < 4; i++) {
+      sharedSlots[i] = i < codes.length() ? codes[i] : ' ';
+    }
+    portEXIT_CRITICAL(&faceMux);
   } else if (cmd == "LIST") {
     while (pos < (int)line.length() && line[pos] == ' ') pos++;
     showList(line.substring(pos));
@@ -324,7 +371,7 @@ void setup() {
     while (1) delay(1000);
   }
 
-  eyes.begin(128, 64, 50);
+  eyes.begin(128, STRIP_TOP - 2, 50);
   eyes.setWidth(34, 34);
   eyes.setHeight(34, 34);
   eyes.setBorderradius(10, 10);
@@ -429,7 +476,15 @@ void renderTask(void *) {
       if (!listDrawn) drawList();
       vTaskDelay(pdMS_TO_TICKS(20));
     } else {
-      eyes.update();
+      // update() now reports whether it drew, so the strip goes into the same
+      // frame and the whole thing costs one flush instead of two.
+      if (eyes.update()) {
+        portENTER_CRITICAL(&faceMux);
+        for (uint8_t i = 0; i < 4; i++) slotStatus[i] = sharedSlots[i];
+        portEXIT_CRITICAL(&faceMux);
+        drawSlotStrip();
+        display.display();
+      }
       vTaskDelay(1);
     }
   }

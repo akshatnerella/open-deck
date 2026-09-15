@@ -31,8 +31,27 @@ only shows the thing in front.
 the front, fullscreen, in your terminal. The previous session is detached, not
 killed — everything keeps running.
 
+A key means the same session every time: FOX is `fox`, CAT is `cat`. If it
+doesn't exist yet, pressing the key creates it. Nothing is discovered, nothing
+gets reshuffled, and there is nothing to configure before the deck is useful —
+a physical button whose meaning moves is worse than no button at all.
+
 **Encoder steps through the panes** in whichever session you're in. Splits and
 separate windows alike; a terminal is a terminal.
+
+**The strip shows all four at a glance.** A row under Pixie carries one mark
+per key, so you can read the whole fleet from across a desk without focusing
+your eyes:
+
+| Mark | Meaning |
+|---|---|
+| (blank) | no session yet |
+| `·` | idle — a shell, nothing running |
+| `▮` | working — something is running |
+| `!` | needs you — a bell, or activity where you aren't looking |
+
+Pixie's face is the same information at lower resolution: she tells you
+*whether* anything wants you, the strip tells you *which*.
 
 **Pixie reacts.** The face is driven by tmux state — she looks concerned when
 something wants attention in a session you aren't watching, happy when an
@@ -87,8 +106,11 @@ running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
 | **FOX OWL CAT PANDA** | summon that session fullscreen | | interrupt it in place |
 | **Encoder** | step through panes in the current session | | |
 
-Bindings live in `~/.config/opendeck/config.json` — actions are resolved by
-name from a registry, so remapping is config, not code.
+**No configuration is required.** The four keys already mean `fox`, `owl`,
+`cat`, `pnda`. If you want a key to mean a project of your own, name it in
+`~/.config/opendeck/config.json` under `sessions` — but the binding stays
+fixed either way. Bindings are resolved by name from a registry, so remapping
+is config, not code.
 
 Two behaviours worth knowing:
 

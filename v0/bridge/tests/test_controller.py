@@ -23,7 +23,7 @@ class FakeTransport:
 
 
 def controller(**kwargs):
-    tmux = FakeTmux(sessions=["webapp"])
+    tmux = FakeTmux(sessions=["fox"])
     transport = FakeTransport()
     return Controller(Config(**kwargs), transport, tmux, FakeTerminal()), transport, tmux
 
@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
 class TestAttentionAnnounce(unittest.TestCase):
     def _controller(self):
-        tmux = FakeTmux(sessions=["webapp", "api"])
+        tmux = FakeTmux(sessions=["fox", "owl"])
         transport = FakeTransport()
         ctrl = Controller(Config(), transport, tmux, FakeTerminal())
         ctrl.slots.refresh()
@@ -94,14 +94,14 @@ class TestAttentionAnnounce(unittest.TestCase):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        ctrl._announce_presence(Snapshot(State.ALERT, attention_session="api"))
+        ctrl._announce_presence(Snapshot(State.ALERT, attention_session="owl"))
         self.assertIn("TOAST OWL wants you", transport.sent)
 
     def test_toasts_only_on_the_transition(self):
         from opendeck.presence import Snapshot, State
 
         ctrl, transport = self._controller()
-        snap = Snapshot(State.ALERT, attention_session="api")
+        snap = Snapshot(State.ALERT, attention_session="owl")
         ctrl._announce_presence(snap)
         transport.sent.clear()
         ctrl._announce_presence(snap)
@@ -144,8 +144,8 @@ class TestPaneListGlance(unittest.TestCase):
         from fakes import pane
 
         tmux = FakeTmux(
-            sessions=["webapp"],
-            panes={"webapp": [
+            sessions=["fox"],
+            panes={"fox": [
                 pane(index=0, command="claude", window_active=True, pane_active=True),
                 pane(index=1, command="nvim"),
             ]},
@@ -167,7 +167,7 @@ class TestPaneListGlance(unittest.TestCase):
         ctrl.handle_encoder(1)
         title = next(m for m in transport.sent if m.startswith("LIST ")).split("|")[0]
         self.assertIn("FOX", title)
-        self.assertIn("webapp", title)
+        self.assertIn("fox", title)
 
     def test_summon_pushes_the_list_not_a_toast(self):
         ctrl, transport = self._controller()
@@ -184,10 +184,10 @@ class TestPaneListGlance(unittest.TestCase):
         from fakes import pane
 
         tmux = FakeTmux(
-            sessions=["webapp", "api"],
+            sessions=["fox", "owl"],
             panes={
-                "webapp": [pane(index=0, command="claude", window_active=True, pane_active=True)],
-                "api": [pane(index=0, command="pytest", window_active=True, pane_active=True)],
+                "fox": [pane(index=0, command="claude", window_active=True, pane_active=True)],
+                "owl": [pane(index=0, command="pytest", window_active=True, pane_active=True)],
             },
             client=False,
         )
@@ -196,7 +196,7 @@ class TestPaneListGlance(unittest.TestCase):
         ctrl.slots.refresh()
         ctrl._announce("summon", {"slot": 1})
         payload = next(m for m in transport.sent if m.startswith("LIST "))
-        self.assertIn("api", payload)
+        self.assertIn("owl", payload)
         self.assertIn("pytest", payload)
         self.assertNotIn("claude", payload)
 
