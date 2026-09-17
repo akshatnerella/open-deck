@@ -94,7 +94,12 @@ running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
 | **X** | interrupt — `C-c` in a shell, `Escape` in an agent | | |
 | **ENTER** | Enter | | |
 | **FOX OWL CAT PANDA** | go to that session | | list its panes |
-| **Encoder** | step through panes | | |
+| **Encoder** | browse panes — ENTER goes there | | |
+
+**Turning the dial doesn't move you.** It highlights a pane in the list;
+**ENTER** goes there. Looking is free, for the same reason holding a key is.
+Hold an animal and the dial browses *that* session — so you can look inside a
+project you're not in and jump straight to one of its panes.
 
 **One chord:** hold **ENTER** and double-tap **TERM** to split *below* instead
 of beside.

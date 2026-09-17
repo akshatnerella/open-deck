@@ -67,15 +67,15 @@ class TestEncoderCoalescing(unittest.TestCase):
         events, delta = ctrl._drain(None)
         self.assertEqual((events, delta), ([], 0))
 
-    def test_one_tmux_call_per_burst(self):
+    def test_a_burst_moves_the_cursor_once(self):
+        # Coalescing still matters: six detents are one redraw, not six.
         ctrl, transport, tmux = controller()
         for _ in range(6):
             transport.events.put(EncoderEvent(1))
         _, delta = ctrl._drain(None)
+        self.assertEqual(delta, 6)
         ctrl.handle_encoder(delta)
-        cycles = [c for c in tmux.calls if c[0] == "cycle_pane"]
-        self.assertEqual(len(cycles), 1)
-        self.assertEqual(cycles[0][2], 6)
+        self.assertEqual([c for c in tmux.calls if c[0] == "select_pane"], [])
 
 
 if __name__ == "__main__":
@@ -155,19 +155,49 @@ class TestPaneListGlance(unittest.TestCase):
         ctrl.slots.refresh()
         return ctrl, transport
 
-    def test_encoder_pushes_the_pane_list(self):
+    def test_the_encoder_pushes_a_list_with_a_cursor(self):
         ctrl, transport = self._controller()
         ctrl.handle_encoder(1)
-        lists = [m for m in transport.sent if m.startswith("LIST ")]
-        self.assertEqual(len(lists), 1)
-        self.assertIn("claude", lists[0])
+        peeks = [m for m in transport.sent if m.startswith("PEEK ")]
+        self.assertEqual(len(peeks), 1)
+        cursor = int(peeks[0][len("PEEK "):].split("|")[0])
+        self.assertGreater(cursor, 0)
 
-    def test_list_title_names_the_slot_and_session(self):
+    def test_the_list_title_names_the_slot_and_session(self):
         ctrl, transport = self._controller()
         ctrl.handle_encoder(1)
-        title = next(m for m in transport.sent if m.startswith("LIST ")).split("|")[0]
+        body = next(m for m in transport.sent if m.startswith("PEEK "))
+        title = body[len("PEEK "):].split("|")[1]
         self.assertIn("FOX", title)
         self.assertIn("fox", title)
+
+    def test_turning_the_dial_does_not_move_you(self):
+        # Looking should not take you anywhere - the same reason holding a
+        # key is free. ENTER is what commits.
+        ctrl, transport = self._controller()
+        tmux = ctrl._tmux
+        ctrl.handle_encoder(1)
+        self.assertEqual([c for c in tmux.calls if c[0] in ("select_pane", "switch")], [])
+
+    def test_enter_goes_to_the_highlighted_pane(self):
+        ctrl, transport = self._controller()
+        tmux = ctrl._tmux
+        ctrl.handle_encoder(1)
+        ctrl.dispatch("KEY_ENTER", "tap")
+        self.assertTrue([c for c in tmux.calls if c[0] == "select_pane"])
+
+    def test_enter_is_a_plain_enter_when_nothing_is_listed(self):
+        ctrl, transport = self._controller()
+        tmux = ctrl._tmux
+        ctrl.dispatch("KEY_ENTER", "tap")
+        self.assertNotIn("select_pane", [c[0] for c in tmux.calls])
+        self.assertTrue([c for c in tmux.calls if c[0] == "send_keys"])
+
+    def test_committing_takes_the_list_down(self):
+        ctrl, transport = self._controller()
+        ctrl.handle_encoder(1)
+        ctrl.dispatch("KEY_ENTER", "tap")
+        self.assertEqual(transport.sent[-1], "PEEK")
 
     def test_summon_pushes_the_list_not_a_toast(self):
         ctrl, transport = self._controller()

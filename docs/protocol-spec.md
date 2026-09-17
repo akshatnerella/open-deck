@@ -41,7 +41,7 @@ window. One physical press yields exactly one action.
 FACE <alert|busy|done|calm>
 TOAST <text>
 LIST <title>|<row>|<row>|...
-PEEK <bar>|<headline>|<detail>
+PEEK <cursor>|<bar>|<row>|...
 ```
 
 `FACE` sets Pixie's expression, one of four wire states. The old
@@ -58,7 +58,11 @@ just brought into view — a title row plus up to five pane rows — held for
 toast, because naming the destination and showing its contents in one shot is
 strictly more useful than a line of text.
 
-`PEEK` carries three rows with fixed roles, because the device positions each
+`PEEK` leads with the **cursor**: the row index the device draws inverted, or
+`-1` for no selection. Inverting a row says "ENTER goes here" instantly and
+costs no width, which a marker character would.
+
+`PEEK` then carries rows, because the device positions each
 by role rather than stacking them: an inverted **bar** naming the key, a
 **headline** the panel is built around, and a small **detail** line. The
 headline is drawn at double size when it fits in 10 characters and normal size

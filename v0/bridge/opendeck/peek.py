@@ -97,6 +97,10 @@ def lines_for(key: str, slots: SlotTable, launch_command: str = "claude",
     return _key_lines(key, launch_command)
 
 
-def payload(lines: list[str]) -> str:
-    """Pack into the one-line wire form the device parses."""
-    return "|".join(lines)
+def payload(lines: list[str], cursor: int = -1) -> str:
+    """Pack into the one-line wire form the device parses.
+
+    `cursor` is the row the device draws inverted - where pressing ENTER would
+    take you. -1 means no selection is in progress.
+    """
+    return "|".join([str(cursor), *lines])

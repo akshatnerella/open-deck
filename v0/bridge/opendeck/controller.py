@@ -41,6 +41,12 @@ class Controller:
         #: Keys physically down right now, so a gesture can be modified by
         #: another key being held. The only chord: ENTER + double-tap TERM.
         self._down: set[str] = set()
+        #: Browsing state. The encoder moves a cursor through a session's
+        #: panes without going anywhere; ENTER commits. Looking should not
+        #: move you - the same reason holding a key is free.
+        self._browse_session: str | None = None
+        self._browse_panes: list = []
+        self._browse_at = 0
         self._slots = SlotTable(tmux, config.sessions)
         self._context = Context(tmux=tmux, terminal=terminal, slots=self._slots, config=config)
         self._gestures = GestureRecognizer(
@@ -62,6 +68,12 @@ class Controller:
         return self._slots
 
     def dispatch(self, key: str, gesture: str) -> None:
+        # While a list is up, ENTER means "go to the highlighted pane". Only
+        # then - everywhere else it is still a plain Enter.
+        if key == "KEY_ENTER" and gesture == "tap" and self._browse_session:
+            if self._commit_browse():
+                return
+
         binding = self._config.binding(key, gesture)
         if binding is None:
             log.debug("unbound: %s %s", key, gesture)
@@ -124,10 +136,18 @@ class Controller:
             session = self._slots.session_for(slot)
             live = self._tmux.panes(session)
             windows = self._tmux.windows(session)
+        if slot is not None and live:
+            # Hold an animal and the dial browses *that* session, so you can
+            # look inside one you are not in and jump straight to a pane.
+            self._browse_session = self._slots.session_for(slot)
+            self._browse_panes = live
+            self._browse_at = next((i for i, p in enumerate(live) if p.active), 0)
+
         lines = peek.lines_for(key, self._slots, self._config.launch_command,
                                live, windows)
         self._peeking = True
-        self._face.show_peek(peek.payload(lines))
+        cursor = self._browse_at + 1 if self._browse_session else -1
+        self._face.show_peek(peek.payload(lines, cursor=cursor))
 
     def _push_pane_list(self, session: str | None = None) -> None:
         session = session or self._slots.current_session()
@@ -147,8 +167,64 @@ class Controller:
         )
 
     def handle_encoder(self, delta: int) -> None:
-        actions.cycle_pane(delta)(self._context)
-        self._push_pane_list()
+        """Move the cursor. Turning the dial no longer takes you anywhere."""
+        session = self._browse_session or self._slots.current_session()
+        if session is None:
+            return
+
+        if session != self._browse_session or not self._browse_panes:
+            self._begin_browse(session)
+        if not self._browse_panes:
+            return
+
+        self._browse_at = (self._browse_at + delta) % len(self._browse_panes)
+        self._push_browse()
+
+    def _begin_browse(self, session: str) -> None:
+        self._browse_session = session
+        self._browse_panes = self._tmux.panes(session)
+        # Start where you already are, so a single detent means "the next one"
+        # rather than "somewhere arbitrary".
+        self._browse_at = next(
+            (i for i, p in enumerate(self._browse_panes) if p.active), 0
+        )
+
+    def _push_browse(self) -> None:
+        session = self._browse_session
+        if session is None:
+            return
+        slot = self._slots.slot_of(session)
+        label = self._slots.label(slot) if slot is not None else "--"
+        windows = self._tmux.windows(session)
+        lines = peek.lines_for(SLOT_KEYS[slot] if slot is not None else "KEY_AGENT1",
+                               self._slots, self._config.launch_command,
+                               self._browse_panes, windows)
+        self._peeking = True
+        self._face.show_peek(peek.payload(lines, cursor=self._browse_at + 1))
+
+    def _commit_browse(self) -> bool:
+        """Go to the pane under the cursor. True if there was one."""
+        if self._browse_session is None or not self._browse_panes:
+            return False
+        session = self._browse_session
+        pane = self._browse_panes[self._browse_at]
+
+        if session != self._tmux.attached_session():
+            self._tmux.switch(session)
+            self._context.terminal.focus()
+        self._tmux.select_pane(session, pane)
+        log.info("go to %s:%s", session, pane.target)
+
+        self._end_browse()
+        return True
+
+    def _end_browse(self) -> None:
+        self._browse_session = None
+        self._browse_panes = []
+        self._browse_at = 0
+        if self._peeking:
+            self._peeking = False
+            self._face.clear_peek()
 
     def _handle(self, event: object, now: float) -> None:
         if isinstance(event, KeyEvent):
@@ -161,7 +237,7 @@ class Controller:
 
             if event.edge is Edge.HOLD:
                 self._show_peek(event.key)
-            elif event.edge is Edge.UP and self._peeking:
+            elif event.edge is Edge.UP and self._peeking and not self._browse_session:
                 self._peeking = False
                 self._face.clear_peek()
             for key, gesture in self._gestures.feed(event, now):

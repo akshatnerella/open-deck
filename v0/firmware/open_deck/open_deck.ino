@@ -14,7 +14,8 @@
 //   FACE <alert|busy|done|calm>
 //   TOAST <text>
 //   LIST <title>|<row>|...
-//   PEEK <row>|<row>|...   (empty payload clears it)
+//   PEEK <cursor>|<bar>|<row>|...   (empty payload clears it)
+//        cursor is the row to draw inverted, or -1 for none
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -110,6 +111,8 @@ volatile unsigned long lastHostCommand = 0;
 char sharedPeek[6][22];
 volatile int  sharedPeekCount = 0;
 volatile bool peekDirty = false;
+volatile int  sharedPeekCursor = -1;
+int  peekCursor = -1;
 char peekRows[6][22];
 int  peekCount = 0;
 bool peekDrawn = false;
@@ -150,7 +153,18 @@ void drawPeek() {
 
   display.setTextSize(big ? 2 : 1);
   for (int i = 1; i <= rows; i++) {
-    display.setCursor(2, top + (i - 1) * line);
+    int y = top + (i - 1) * line;
+
+    // The selected row is inverted rather than marked with a character: on a
+    // one-bit panel that reads instantly and costs no width.
+    bool selected = (i == peekCursor);
+    if (selected) {
+      display.fillRect(0, y - 2, 128, line, SH110X_WHITE);
+      display.setTextColor(SH110X_BLACK);
+    } else {
+      display.setTextColor(SH110X_WHITE);
+    }
+    display.setCursor(2, y);
     // Size 2 fits 10 characters; cropping here rather than on the host keeps
     // the host from having to know which size the device picked.
     if (big) {
@@ -162,6 +176,7 @@ void drawPeek() {
       display.print(peekRows[i]);
     }
   }
+  display.setTextColor(SH110X_WHITE);
 
   display.display();
   peekDrawn = true;
@@ -309,7 +324,15 @@ void handleCommand(const String &line) {
   } else if (cmd == "PEEK") {
     while (pos < (int)line.length() && line[pos] == ' ') pos++;
     String body = line.substring(pos);
+    // First field is the cursor row, then the bar, then the pane rows.
+    int firstBar = body.indexOf('|');
+    int cur = -1;
+    if (firstBar > 0) {
+      cur = body.substring(0, firstBar).toInt();
+      body = body.substring(firstBar + 1);
+    }
     portENTER_CRITICAL(&faceMux);
+    sharedPeekCursor = cur;
     sharedPeekCount = 0;
     int start = 0;
     while (body.length() && sharedPeekCount < 6) {
@@ -460,6 +483,7 @@ void renderTask(void *) {
     if (newPeek) {
       for (int i = 0; i < sharedPeekCount; i++) strncpy(peekRows[i], sharedPeek[i], 22);
       peekCount = sharedPeekCount;
+      peekCursor = sharedPeekCursor;
       peekDirty = false;
     }
     portEXIT_CRITICAL(&faceMux);

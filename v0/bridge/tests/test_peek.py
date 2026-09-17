@@ -111,12 +111,15 @@ class TestPanelFits(unittest.TestCase):
 
 
 class TestWireFormat(unittest.TestCase):
-    def test_payload_joins_rows_with_bars(self):
-        self.assertEqual(peek.payload(["a", "b", "c"]), "a|b|c")
+    def test_payload_leads_with_the_cursor_row(self):
+        self.assertEqual(peek.payload(["a", "b", "c"], cursor=2), "2|a|b|c")
+
+    def test_no_selection_is_minus_one(self):
+        self.assertEqual(peek.payload(["a"]).split("|")[0], "-1")
 
     def test_blank_rows_survive_the_round_trip(self):
         # A blank row is deliberate spacing, so it must not be dropped.
-        self.assertEqual(peek.payload(["FOX", "", "tap"]).split("|"),
+        self.assertEqual(peek.payload(["FOX", "", "tap"]).split("|")[1:],
                          ["FOX", "", "tap"])
 
 

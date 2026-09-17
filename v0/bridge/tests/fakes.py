@@ -33,6 +33,10 @@ class FakeTmux:
     def has_client(self):
         return self._client
 
+    def select_pane(self, session, pane):
+        self.calls.append(("select_pane", session, pane.target))
+        return True
+
     def switch(self, session):
         self.calls.append(("switch", session))
         return True
