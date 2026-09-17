@@ -6,12 +6,12 @@ import logging
 import queue
 import time
 
-from . import actions, panes
+from . import actions, panes, peek
 from .agents import AgentRegistry
 from .hookserver import DEFAULT_PORT, HookServer
 from .actions import Context
-from .config import Config
-from .events import Connected, Disconnected, EncoderEvent, Heartbeat, KeyEvent
+from .config import SLOT_KEYS, Config
+from .events import Connected, Disconnected, Edge, EncoderEvent, Heartbeat, KeyEvent
 from .face import Face
 from .presence import PresenceMonitor, State
 from .gestures import GestureRecognizer
@@ -36,6 +36,8 @@ class Controller:
     ) -> None:
         self._config = config
         self._transport = transport
+        self._tmux = tmux
+        self._peeking = False
         self._slots = SlotTable(tmux, config.sessions)
         self._context = Context(tmux=tmux, terminal=terminal, slots=self._slots, config=config)
         self._gestures = GestureRecognizer(
@@ -107,6 +109,16 @@ class Controller:
         self._agents.record(event, target, session, payload)
         self._dirty = True
 
+    def _show_peek(self, key: str) -> None:
+        self._slots.refresh()
+        count = None
+        slot = SLOT_KEYS.index(key) if key in SLOT_KEYS else None
+        if slot is not None and self._slots.exists(slot):
+            count = len(self._tmux.panes(self._slots.session_for(slot)))
+        lines = peek.lines_for(key, self._slots, self._config.launch_command, count)
+        self._peeking = True
+        self._face.show_peek(peek.payload(lines))
+
     def _push_pane_list(self, session: str | None = None) -> None:
         session = session or self._slots.current_session()
         if session is None:
@@ -130,6 +142,13 @@ class Controller:
 
     def _handle(self, event: object, now: float) -> None:
         if isinstance(event, KeyEvent):
+            # Peek tracks the finger rather than the gesture: shown once the
+            # hold registers, taken down the moment the key comes up.
+            if event.edge is Edge.HOLD:
+                self._show_peek(event.key)
+            elif event.edge is Edge.UP and self._peeking:
+                self._peeking = False
+                self._face.clear_peek()
             for key, gesture in self._gestures.feed(event, now):
                 self.dispatch(key, gesture)
         elif isinstance(event, Connected):

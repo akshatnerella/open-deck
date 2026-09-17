@@ -53,6 +53,10 @@ your eyes:
 Pixie's face is the same information at lower resolution: she tells you
 *whether* anything wants you, the strip tells you *which*.
 
+**Hold any key to see what it does.** The panel shows the key, the state of
+its session, and what tap does — so there is nothing to memorise and no manual
+to lose. Holding changes nothing; that is what makes it safe to explore.
+
 **Pixie reacts.** The face is driven by tmux state — she looks concerned when
 something wants attention in a session you aren't watching, happy when an
 agent finishes, curious while one works. Brief text toasts narrate what a
@@ -103,7 +107,7 @@ running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
 | **MIC** | voice-mode toggle — Space, or `C-Space` on grok | | |
 | **X** | interrupt, or close an idle pane | | |
 | **ENTER** | Enter | | |
-| **FOX OWL CAT PANDA** | summon that session fullscreen | | interrupt it in place |
+| **FOX OWL CAT PANDA** | summon that session fullscreen | | peek: what this key does |
 | **Encoder** | step through panes in the current session | | |
 
 **No configuration is required.** The four keys already mean `fox`, `owl`,
@@ -165,7 +169,7 @@ Start with [`v0/README.md`](v0/README.md) and [`v0/BOM.md`](v0/BOM.md).
 |---|---|
 | Hardware: display, encoder, 8-key matrix | ✅ validated |
 | Firmware: input on core 1, rendering on core 0 | ✅ built |
-| Host daemon: tmux navigation + Pixie | ✅ built, 163 tests |
+| Host daemon: tmux navigation + Pixie | ✅ built, 179 tests |
 | `FACE`/`LIST` protocol, glance layer, offline watchdog | ✅ built, 134 tests, verified on hardware |
 | Grok / OpenCode profiles | ⏳ written, unverified against those harnesses |
 | Custom PCB | 📋 v1 |

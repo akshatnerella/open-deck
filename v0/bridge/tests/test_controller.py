@@ -204,3 +204,45 @@ class TestPaneListGlance(unittest.TestCase):
         ctrl, transport = self._controller()
         ctrl._announce("summon", {"slot": 3})
         self.assertEqual([m for m in transport.sent if m.startswith("LIST ")], [])
+
+
+class TestPeek(unittest.TestCase):
+    """Holding a key shows what it does; releasing takes it down."""
+
+    def _controller(self):
+        tmux = FakeTmux(sessions=["fox", "owl"])
+        transport = FakeTransport()
+        ctrl = Controller(Config(), transport, tmux, FakeTerminal())
+        ctrl.slots.refresh()
+        return ctrl, transport
+
+    def _peeks(self, transport):
+        return [m for m in transport.sent if m.startswith("PEEK")]
+
+    def test_holding_a_key_shows_the_panel(self):
+        ctrl, transport = self._controller()
+        ctrl._handle(KeyEvent(key="KEY_AGENT1", edge=Edge.HOLD), 0.0)
+        sent = self._peeks(transport)
+        self.assertTrue(sent)
+        self.assertIn("FOX", sent[0])
+
+    def test_releasing_clears_the_panel(self):
+        ctrl, transport = self._controller()
+        ctrl._handle(KeyEvent(key="KEY_AGENT1", edge=Edge.HOLD), 0.0)
+        ctrl._handle(KeyEvent(key="KEY_AGENT1", edge=Edge.UP), 0.1)
+        self.assertEqual(self._peeks(transport)[-1], "PEEK")
+
+    def test_a_release_without_a_hold_clears_nothing(self):
+        # Every tap ends in an UP. Sending a clear for taps would put a
+        # pointless message on the wire for the commonest gesture there is.
+        ctrl, transport = self._controller()
+        ctrl._handle(KeyEvent(key="KEY_AGENT1", edge=Edge.UP), 0.0)
+        self.assertEqual(self._peeks(transport), [])
+
+    def test_holding_does_not_interrupt_the_session(self):
+        # Peeking has to be free, or nobody explores the device.
+        ctrl, transport = self._controller()
+        tmux = ctrl._tmux
+        ctrl._handle(KeyEvent(key="KEY_AGENT1", edge=Edge.HOLD), 0.0)
+        ctrl._handle(KeyEvent(key="KEY_AGENT1", edge=Edge.UP), 0.1)
+        self.assertNotIn(("send_keys", "fox", "Escape"), tmux.calls)

@@ -14,6 +14,7 @@
 //   FACE <alert|busy|done|calm>
 //   TOAST <text>
 //   LIST <title>|<row>|...
+//   PEEK <row>|<row>|...   (empty payload clears it)
 //   SLOTS <4 chars>   ' '=empty  '.'=idle  '@'=working  '!'=needs you  '*'=done
 
 #include <Wire.h>
@@ -104,6 +105,17 @@ volatile unsigned long lastHostCommand = 0;
 // The slot strip: four projects, four states, readable across a desk. This is
 // the one thing on screen that says *which* agent wants you - the face only
 // says whether any of them does.
+// Peek: what a held key will do. Unlike a toast it has no timeout - it is on
+// screen exactly as long as the finger is down, so it cannot be missed and
+// cannot linger.
+char sharedPeek[5][22];
+volatile int  sharedPeekCount = 0;
+volatile bool peekDirty = false;
+char peekRows[5][22];
+int  peekCount = 0;
+bool peekDrawn = false;
+bool peekWasShown = false;
+
 const char *SLOT_LABELS[4] = { "FOX", "OWL", "CAT", "PNDA" };
 const uint8_t STRIP_TOP    = 52;          // rows 52..63; the face owns 0..51
 volatile char sharedSlots[4] = { ' ', ' ', ' ', ' ' };
@@ -144,6 +156,22 @@ void drawSlotStrip() {
       display.drawPixel(x + 27, STRIP_TOP + 6, SH110X_WHITE);
     }
   }
+}
+
+void drawPeek() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SH110X_WHITE);
+
+  for (int i = 0; i < peekCount; i++) {
+    display.setCursor(0, i * 11 + 4);
+    display.print(peekRows[i]);
+    // The first row names the key, so underlining it separates the heading
+    // from the actions without spending a whole row on a rule.
+    if (i == 0) display.drawFastHLine(0, i * 11 + 13, 128, SH110X_WHITE);
+  }
+  display.display();
+  peekDrawn = true;
 }
 
 void emit(const String &line) {
@@ -287,6 +315,22 @@ void handleCommand(const String &line) {
   } else if (cmd == "TOAST") {
     while (pos < (int)line.length() && line[pos] == ' ') pos++;
     showToast(line.substring(pos));
+  } else if (cmd == "PEEK") {
+    while (pos < (int)line.length() && line[pos] == ' ') pos++;
+    String body = line.substring(pos);
+    portENTER_CRITICAL(&faceMux);
+    sharedPeekCount = 0;
+    int start = 0;
+    while (body.length() && sharedPeekCount < 5) {
+      int bar = body.indexOf('|', start);
+      String row = bar < 0 ? body.substring(start) : body.substring(start, bar);
+      row.toCharArray(sharedPeek[sharedPeekCount], 22);
+      sharedPeekCount++;
+      if (bar < 0) break;
+      start = bar + 1;
+    }
+    peekDirty = true;
+    portEXIT_CRITICAL(&faceMux);
   } else if (cmd == "SLOTS") {
     String codes = nextToken(line, pos);
     portENTER_CRITICAL(&faceMux);
@@ -427,6 +471,23 @@ void renderTask(void *) {
       listDrawn = false;
     }
 
+    portENTER_CRITICAL(&faceMux);
+    bool newPeek = peekDirty;
+    if (newPeek) {
+      for (int i = 0; i < sharedPeekCount; i++) strncpy(peekRows[i], sharedPeek[i], 22);
+      peekCount = sharedPeekCount;
+      peekDirty = false;
+    }
+    portEXIT_CRITICAL(&faceMux);
+    if (newPeek) peekDrawn = false;
+
+    // Held key: show it and nothing else, for as long as it is held.
+    if (peekCount > 0) {
+      if (!peekDrawn) { drawPeek(); peekWasShown = true; }
+      vTaskDelay(pdMS_TO_TICKS(20));
+      continue;
+    }
+
     bool hostAlive = lastHostCommand && (millis() - lastHostCommand < OFFLINE_AFTER_MS);
     if (!hostAlive) {
       if (!offlineToastShown) {
@@ -478,6 +539,11 @@ void renderTask(void *) {
     } else {
       // update() now reports whether it drew, so the strip goes into the same
       // frame and the whole thing costs one flush instead of two.
+      if (peekWasShown) {      // peek just cleared; repaint from scratch
+        peekWasShown = false;
+        display.clearDisplay();
+        eyes.open();
+      }
       if (eyes.update()) {
         portENTER_CRITICAL(&faceMux);
         for (uint8_t i = 0; i < 4; i++) slotStatus[i] = sharedSlots[i];

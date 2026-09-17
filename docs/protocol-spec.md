@@ -41,6 +41,7 @@ window. One physical press yields exactly one action.
 FACE <alert|busy|done|calm>
 TOAST <text>
 LIST <title>|<row>|<row>|...
+PEEK <row>|<row>|...
 SLOTS <4 chars>
 ```
 
@@ -57,6 +58,14 @@ just brought into view — a title row plus up to five pane rows — held for
 1.2s, then decaying back to the face. Summon sends `LIST` too, in place of a
 toast, because naming the destination and showing its contents in one shot is
 strictly more useful than a line of text.
+
+`PEEK` shows what a held key will do, replacing everything else on screen. It
+has no timeout: it goes up when the hold registers and comes down when the key
+is released, so it tracks the finger. An empty payload clears it.
+
+Peeking is non-destructive by design. Holding used to interrupt that slot's
+session; a destructive action on the same gesture teaches people not to
+explore, which defeats the point of a self-documenting device.
 
 `SLOTS` carries one status character per key, in slot order — the strip drawn
 under Pixie on the home screen. It is the only message that describes all four

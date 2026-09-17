@@ -49,6 +49,13 @@ class Face:
     def show_list(self, payload: str) -> None:
         self._transport.send(f"LIST {payload}")
 
+    def show_peek(self, payload: str) -> None:
+        self._transport.send(f"PEEK {payload}")
+
+    def clear_peek(self) -> None:
+        """Take the panel down. Sent on release, so it tracks the finger."""
+        self._transport.send("PEEK")
+
     def show_slots(self, codes: str) -> bool:
         """Push the four slot status characters, if they changed.
 

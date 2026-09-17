@@ -47,10 +47,11 @@ def default_bindings() -> dict[str, dict[str, Binding]]:
         "KEY_ENTER": {"tap": Binding("send_keys", {"keys": ["Enter"]})},
     }
     for slot, key in enumerate(SLOT_KEYS):
-        bindings[key] = {
-            "tap": Binding("summon", {"slot": slot}),
-            "hold": Binding("interrupt", {"slot": slot}),
-        }
+        # No "hold" action: holding shows what the key does (see peek.py).
+        # Binding a destructive action to the same gesture would teach people
+        # not to explore, which is the opposite of what peek is for. Bind
+        # "hold" in config.json if you want the old interrupt-in-place.
+        bindings[key] = {"tap": Binding("summon", {"slot": slot})}
     return bindings
 
 
