@@ -6,7 +6,7 @@ import logging
 import queue
 import time
 
-from . import actions, panes, peek
+from . import actions, harness, panes, peek
 from .agents import AgentRegistry
 from .hookserver import DEFAULT_PORT, HookServer
 from .actions import Context
@@ -111,11 +111,14 @@ class Controller:
 
     def _show_peek(self, key: str) -> None:
         self._slots.refresh()
-        count = None
+        count = title = None
         slot = SLOT_KEYS.index(key) if key in SLOT_KEYS else None
         if slot is not None and self._slots.exists(slot):
-            count = len(self._tmux.panes(self._slots.session_for(slot)))
-        lines = peek.lines_for(key, self._slots, self._config.launch_command, count)
+            live = self._tmux.panes(self._slots.session_for(slot))
+            count = len(live)
+            title = harness.session_title(live)
+        lines = peek.lines_for(key, self._slots, self._config.launch_command,
+                               count, title)
         self._peeking = True
         self._face.show_peek(peek.payload(lines))
 

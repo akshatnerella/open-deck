@@ -8,22 +8,15 @@ tmux already tracks per-window activity and bell flags, which is exactly the
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass
 from .compat import StrEnum
 
+from . import harness
 from .agents import AgentRegistry, Status
 from .slots import SlotTable
 from .tmux import SHELLS, Tmux
 
 log = logging.getLogger(__name__)
-
-#: Commands that mean an agent is working in a pane.
-AGENT_COMMANDS = frozenset({"claude", "cla", "grok", "opencode", "codex", "aider", "node"})
-
-#: Claude Code reports its version string (e.g. "2.1.261") as the pane's
-#: current command rather than its binary name, so match that shape too.
-_VERSION_LIKE = re.compile(r"^\d+(?:\.\d+)+$")
 
 class State(StrEnum):
     ALERT = "alert"
@@ -39,9 +32,8 @@ class Snapshot:
 
 
 def is_agent(command: str) -> bool:
-    if not command or command in SHELLS:
-        return False
-    return command in AGENT_COMMANDS or bool(_VERSION_LIKE.match(command))
+    """Kept as the module's public name; the patterns live in harness.py."""
+    return harness.is_agent_command(command)
 
 
 def is_busy(command: str) -> bool:

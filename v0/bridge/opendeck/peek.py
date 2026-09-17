@@ -30,7 +30,8 @@ def _fit(text: str) -> str:
     return text[:WIDTH]
 
 
-def _slot_lines(slot: int, slots: SlotTable, panes: int | None) -> list[str]:
+def _slot_lines(slot: int, slots: SlotTable, panes: int | None,
+                title: str | None = None) -> list[str]:
     session = slots.session_for(slot) or "?"
     state = slots.state_of(slot)
 
@@ -47,7 +48,9 @@ def _slot_lines(slot: int, slots: SlotTable, panes: int | None) -> list[str]:
         if panes:
             detail += f"  {panes} pane" + ("s" if panes != 1 else "")
         lines.append(_fit(detail))
-        lines.append("")
+        # The agent names its own work far better than we can ("open deck"
+        # beats "2 panes"), so give it the row when it has something to say.
+        lines.append(_fit(title) if title else "")
         lines.append(_fit("tap  go there"))
     return lines
 
@@ -70,10 +73,10 @@ def _key_lines(key: str, launch_command: str) -> list[str]:
 
 
 def lines_for(key: str, slots: SlotTable, launch_command: str = "claude",
-              panes: int | None = None) -> list[str]:
+              panes: int | None = None, title: str | None = None) -> list[str]:
     """The panel shown while `key` is held."""
     if key in SLOT_KEYS:
-        return _slot_lines(SLOT_KEYS.index(key), slots, panes)[:MAX_LINES]
+        return _slot_lines(SLOT_KEYS.index(key), slots, panes, title)[:MAX_LINES]
     return _key_lines(key, launch_command)[:MAX_LINES]
 
 

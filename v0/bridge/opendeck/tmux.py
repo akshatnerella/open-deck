@@ -24,7 +24,7 @@ _GENERIC_WINDOW_NAMES = frozenset({"zsh", "bash", "sh", "fish"})
 _SESSION_FORMAT = "#{session_name}\t#{session_windows}\t#{session_attached}"
 _PANE_FORMAT = (
     "#{window_index}\t#{pane_index}\t#{pane_current_command}\t"
-    "#{window_active}\t#{pane_active}"
+    "#{window_active}\t#{pane_active}\t#{pane_title}"
 )
 _WINDOW_FORMAT = (
     "#{window_index}\t#{window_name}\t#{pane_current_command}\t"
@@ -67,6 +67,9 @@ class Pane:
     command: str
     window_active: bool
     pane_active: bool
+    #: The terminal title the program set. Claude Code puts its session name
+    #: here; most programs put junk. See harness.clean_title.
+    title: str = ""
 
     @property
     def target(self) -> str:
@@ -181,7 +184,7 @@ class Tmux:
         panes = []
         for line in result.stdout.splitlines():
             parts = line.split("\t")
-            if len(parts) == 5:
+            if len(parts) >= 5:
                 panes.append(
                     Pane(
                         window=int(parts[0]),
@@ -189,6 +192,7 @@ class Tmux:
                         command=parts[2],
                         window_active=parts[3] == "1",
                         pane_active=parts[4] == "1",
+                        title=parts[5] if len(parts) > 5 else "",
                     )
                 )
         return panes

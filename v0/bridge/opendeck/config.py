@@ -57,7 +57,11 @@ def default_bindings() -> dict[str, dict[str, Binding]]:
 
 @dataclass(frozen=True)
 class Config:
-    launch_command: str = "claude"
+    #: Which agent CLI the deck launches. Picks the default launch command;
+    #: detection stays permissive so a pane running a different one still
+    #: reads as working rather than idle.
+    harness: str = "claude"
+    launch_command: str = ""
     #: tmux session pinned to each slot; None means "auto-assign on discovery".
     sessions: tuple[str | None, ...] = (None, None, None, None)
     serial_port: str | None = None
@@ -68,6 +72,14 @@ class Config:
     #: "session" reaches panes in every window; "window" stays in the current one.
     encoder_scope: str = "session"
     bindings: dict[str, dict[str, Binding]] = field(default_factory=default_bindings)
+
+    def __post_init__(self) -> None:
+        # Frozen dataclass, so fill the derived default the long way. Setting
+        # "harness": "grok" should be enough on its own; naming the command as
+        # well stays possible for anyone wrapping it in a shell alias.
+        if not self.launch_command:
+            from .harness import get
+            object.__setattr__(self, "launch_command", get(self.harness).command)
 
     def binding(self, key: str, gesture: str) -> Binding | None:
         return self.bindings.get(key, {}).get(gesture)
@@ -85,7 +97,7 @@ class Config:
             sessions = tuple(name or None for name in padded)
 
         known = {
-            "launch_command", "serial_port", "terminal", "fullscreen",
+            "harness", "launch_command", "serial_port", "terminal", "fullscreen",
             "split_horizontal", "double_tap_window", "encoder_scope",
         }
         kwargs = {k: v for k, v in data.items() if k in known}

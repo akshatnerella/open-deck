@@ -110,6 +110,19 @@ running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
 | **FOX OWL CAT PANDA** | summon that session fullscreen | | peek: what this key does |
 | **Encoder** | step through panes in the current session | | |
 
+**Pick your agent CLI** with one setting — `"harness": "grok"` (or `claude`,
+`opencode`, `codex`, `aider`) in `~/.config/opendeck/config.json`. That's all
+it takes; the launch command follows from it.
+
+Detection stays deliberately permissive: a deck set to grok still shows a
+Claude pane as working. The setting decides what a key *launches*, and must
+not make the display lie about what's actually running.
+
+**Holding a session key shows what the agent is doing**, by its own name.
+Claude Code reports a session title — `open deck` — which beats anything the
+deck could infer. When there's nothing meaningful, the row stays blank rather
+than showing noise.
+
 **No configuration is required.** The four keys already mean `fox`, `owl`,
 `cat`, `pnda`. If you want a key to mean a project of your own, name it in
 `~/.config/opendeck/config.json` under `sessions` — but the binding stays
@@ -169,7 +182,7 @@ Start with [`v0/README.md`](v0/README.md) and [`v0/BOM.md`](v0/BOM.md).
 |---|---|
 | Hardware: display, encoder, 8-key matrix | ✅ validated |
 | Firmware: input on core 1, rendering on core 0 | ✅ built |
-| Host daemon: tmux navigation + Pixie | ✅ built, 179 tests |
+| Host daemon: tmux navigation + Pixie | ✅ built, 199 tests |
 | `FACE`/`LIST` protocol, glance layer, offline watchdog | ✅ built, 134 tests, verified on hardware |
 | Grok / OpenCode profiles | ⏳ written, unverified against those harnesses |
 | Custom PCB | 📋 v1 |
