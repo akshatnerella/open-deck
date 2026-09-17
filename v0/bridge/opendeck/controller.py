@@ -25,6 +25,11 @@ log = logging.getLogger(__name__)
 REFRESH_INTERVAL = 2.0
 POLL_TIMEOUT = 0.05
 
+#: How long a pane list stays up after you stop touching the deck. It is a
+#: look-and-go tool, not a mode - walk away mid-browse and the deck goes back
+#: to being a face.
+BROWSE_TIMEOUT = 2.5
+
 
 class Controller:
     def __init__(
@@ -47,6 +52,7 @@ class Controller:
         self._browse_session: str | None = None
         self._browse_panes: list = []
         self._browse_at = 0
+        self._browse_expires = 0.0
         self._slots = SlotTable(tmux, config.sessions)
         self._context = Context(tmux=tmux, terminal=terminal, slots=self._slots, config=config)
         self._gestures = GestureRecognizer(
@@ -142,6 +148,7 @@ class Controller:
             self._browse_session = self._slots.session_for(slot)
             self._browse_panes = live
             self._browse_at = next((i for i, p in enumerate(live) if p.active), 0)
+            self._browse_expires = time.monotonic() + BROWSE_TIMEOUT
 
         lines = peek.lines_for(key, self._slots, self._config.launch_command,
                                live, windows)
@@ -178,6 +185,16 @@ class Controller:
             return
 
         self._browse_at = (self._browse_at + delta) % len(self._browse_panes)
+        self._browse_expires = time.monotonic() + BROWSE_TIMEOUT
+
+        # Follow along when you are browsing the session you are already in:
+        # the Mac is the preview, and without it you are choosing from names
+        # on a tiny screen with nothing to look at. Browsing *another*
+        # session still waits for ENTER - a dial should never yank you out of
+        # what you are reading.
+        if session == self._tmux.attached_session():
+            self._tmux.select_pane(session, self._browse_panes[self._browse_at])
+
         self._push_browse()
 
     def _begin_browse(self, session: str) -> None:
@@ -296,6 +313,12 @@ class Controller:
 
             for key, gesture in self._gestures.tick(time.monotonic()):
                 self.dispatch(key, gesture)
+
+            # A held key keeps its own panel up, so only start the countdown
+            # once nothing is being pressed.
+            if (self._browse_session and not self._down
+                    and now > self._browse_expires):
+                self._end_browse()
 
             if now - last_refresh >= REFRESH_INTERVAL:
                 self._slots.refresh()

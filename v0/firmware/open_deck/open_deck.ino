@@ -144,11 +144,11 @@ void drawPeek() {
   int rows = peekCount - 1;
   if (rows < 1) { display.display(); peekDrawn = true; return; }
 
-  // Scale to how much there is to say. One or two panes get the big face and
-  // read across a desk; four have to be small to fit at all. The panel is
-  // always full rather than always the same size.
-  bool big = (rows <= 2);
-  int line  = big ? 16 : 11;
+  // One size for every row count. Double-height type looked shouty for what
+  // this is - a list you scan, not a headline - and it cropped names that
+  // fit fine at normal size.
+  bool big = false;
+  int line  = 12;
   int top   = 13 + (51 - rows * line) / 2;   // centre the block under the bar
 
   display.setTextSize(big ? 2 : 1);

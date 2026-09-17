@@ -96,10 +96,14 @@ running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
 | **FOX OWL CAT PANDA** | go to that session | | list its panes |
 | **Encoder** | browse panes — ENTER goes there | | |
 
-**Turning the dial doesn't move you.** It highlights a pane in the list;
-**ENTER** goes there. Looking is free, for the same reason holding a key is.
-Hold an animal and the dial browses *that* session — so you can look inside a
-project you're not in and jump straight to one of its panes.
+**The dial follows you in the session you're in** — your Mac is the preview,
+so you can see what you're picking. Hold an animal and it browses *that*
+session instead, without moving you: a dial shouldn't yank you out of what
+you're reading. **ENTER** goes to the highlighted pane, switching sessions if
+it's somewhere else.
+
+Stop touching it and the list gives up after a couple of seconds and goes
+back to Pixie. It's a look-and-go tool, not a mode.
 
 **One chord:** hold **ENTER** and double-tap **TERM** to split *below* instead
 of beside.

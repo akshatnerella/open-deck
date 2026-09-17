@@ -171,13 +171,32 @@ class TestPaneListGlance(unittest.TestCase):
         self.assertIn("FOX", title)
         self.assertIn("fox", title)
 
-    def test_turning_the_dial_does_not_move_you(self):
-        # Looking should not take you anywhere - the same reason holding a
-        # key is free. ENTER is what commits.
+    def test_the_dial_follows_along_in_the_session_you_are_in(self):
+        # Your Mac is the preview. Without it you are choosing from names on
+        # a tiny screen with nothing to look at.
         ctrl, transport = self._controller()
         tmux = ctrl._tmux
         ctrl.handle_encoder(1)
+        self.assertTrue([c for c in tmux.calls if c[0] == "select_pane"])
+
+    def test_the_dial_never_pulls_you_into_another_session(self):
+        # Browsing a session you are not in waits for ENTER: a dial should
+        # not yank you out of what you are reading.
+        ctrl, transport = self._controller()
+        tmux = ctrl._tmux
+        ctrl._browse_session = "owl"
+        ctrl._browse_panes = tmux.panes("fox")
+        ctrl.handle_encoder(1)
         self.assertEqual([c for c in tmux.calls if c[0] in ("select_pane", "switch")], [])
+
+    def test_the_list_gives_up_and_goes_back_to_pixie(self):
+        # A look-and-go tool, not a mode.
+        ctrl, transport = self._controller()
+        ctrl.handle_encoder(1)
+        ctrl._browse_expires = 0.0          # pretend the timeout elapsed
+        ctrl._end_browse()
+        self.assertEqual(transport.sent[-1], "PEEK")
+        self.assertIsNone(ctrl._browse_session)
 
     def test_enter_goes_to_the_highlighted_pane(self):
         ctrl, transport = self._controller()
