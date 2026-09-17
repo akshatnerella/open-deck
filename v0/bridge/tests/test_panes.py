@@ -214,3 +214,22 @@ class TestAgentSessionTitleAsLabel(unittest.TestCase):
     def test_long_titles_are_cropped_to_the_column(self):
         label = pane_label(self._pane(title="✳ an extremely long session name"), None)
         self.assertLessEqual(len(label), LABEL_WIDTH)
+
+
+class TestAgentFallbackLabel(unittest.TestCase):
+    """With no session title, the label must say which agent it actually is."""
+
+    def _pane(self, command):
+        return Pane(window=1, index=1, command=command, window_active=True,
+                    pane_active=True, title="")
+
+    def test_a_grok_pane_is_not_labelled_claude(self):
+        self.assertEqual(pane_label(self._pane("grok-1.0.30-mac"), None), "grok")
+
+    def test_a_claude_pane_says_claude(self):
+        self.assertEqual(pane_label(self._pane("2.1.268"), None), "claude")
+
+    def test_the_raw_versioned_process_never_reaches_the_screen(self):
+        # "grok-1.0.30-mac" is noise on a 21-column panel.
+        for cmd in ("grok-1.0.30-mac", "2.1.268", "opencode-2.0"):
+            self.assertNotIn("-", pane_label(self._pane(cmd), None))

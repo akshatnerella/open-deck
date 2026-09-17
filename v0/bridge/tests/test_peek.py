@@ -4,6 +4,12 @@ from opendeck import peek
 from opendeck.slots import SlotTable
 
 from fakes import FakeTmux
+from opendeck.tmux import Pane, Window
+
+
+def fpane(index=1, command="zsh", title="", active=False, window=1):
+    return Pane(window=window, index=index, command=command,
+                window_active=active, pane_active=active, title=title)
 
 
 def table(sessions=(), client=True):
@@ -26,19 +32,35 @@ class TestSlotPeek(unittest.TestCase):
         self.assertIn("not started", body)
         self.assertIn("press", body)
 
-    def test_a_live_slot_reports_its_state(self):
-        t = FakeTmux(sessions=["fox"])
-        t._panes = {"fox": [type("P", (), {"command": "grok"})()]}
-        slots = SlotTable(t)
-        slots.refresh()
-        lines = peek.lines_for("KEY_AGENT1", slots)
-        self.assertIn("working", " ".join(lines))
+    def test_one_row_per_pane(self):
+        panes = [fpane(1, "2.1.268", "✳ open deck", active=True),
+                 fpane(2, "zsh")]
+        lines = peek.lines_for("KEY_AGENT1", table(["fox"]), panes=panes)
+        self.assertEqual(len(lines), 3)          # bar + two panes
 
-    def test_pane_count_is_pluralised(self):
-        one = peek.lines_for("KEY_AGENT1", table(["fox"]), panes=1)
-        two = peek.lines_for("KEY_AGENT1", table(["fox"]), panes=2)
-        self.assertIn("1 pane", " ".join(one))
-        self.assertIn("2 panes", " ".join(two))
+    def test_a_plain_terminal_is_shown_not_hidden(self):
+        # An empty pane is part of the shape of the session; omitting it would
+        # make the count on the deck disagree with the count on your screen.
+        lines = peek.lines_for("KEY_AGENT1", table(["fox"]), panes=[fpane(1, "zsh")])
+        self.assertIn("zsh", " ".join(lines))
+
+    def test_an_agent_pane_is_marked_differently_from_a_shell(self):
+        rows = [peek.pane_row(fpane(1, "zsh")),
+                peek.pane_row(fpane(2, "grok-1.0.30-mac"))]
+        self.assertNotEqual(rows[0][1], rows[1][1])
+
+    def test_the_active_pane_is_marked(self):
+        self.assertTrue(peek.pane_row(fpane(1, "zsh", active=True)).startswith(">"))
+        self.assertFalse(peek.pane_row(fpane(1, "zsh")).startswith(">"))
+
+    def test_an_agent_pane_shows_its_session_name(self):
+        row = peek.pane_row(fpane(1, "2.1.268", "✳ open deck"))
+        self.assertIn("open_deck", row)
+
+    def test_more_panes_than_fit_are_cropped(self):
+        panes = [fpane(i, "zsh") for i in range(1, 9)]
+        lines = peek.lines_for("KEY_AGENT1", table(["fox"]), panes=panes)
+        self.assertEqual(len(lines), 1 + peek.MAX_ROWS)
 
 
 class TestFunctionKeyPeek(unittest.TestCase):
@@ -75,11 +97,11 @@ class TestPanelFits(unittest.TestCase):
             for line in peek.lines_for(key, slots, launch_command="opencode"):
                 self.assertLessEqual(len(line), peek.WIDTH, f"{key}: {line!r}")
 
-    def test_exactly_three_rows(self):
-        # bar / headline / detail. The firmware positions each by role, so a
-        # fourth row would have nowhere to go.
+    def test_never_more_rows_than_the_panel_holds(self):
+        panes = [fpane(i, "zsh") for i in range(1, 9)]
         for key in ("KEY_AGENT1", "KEY_AGENT2", "KEY_TERM", "KEY_MIC", "KEY_ENTER"):
-            self.assertEqual(len(peek.lines_for(key, table(["fox"]))), 3, key)
+            lines = peek.lines_for(key, table(["fox"]), panes=panes)
+            self.assertLessEqual(len(lines), 1 + peek.MAX_ROWS, key)
 
     def test_a_long_launch_command_is_cropped_not_overflowed(self):
         lines = peek.lines_for("KEY_TERM", table(),

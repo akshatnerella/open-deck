@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Callable, Protocol
 
 from .config import Config
+from . import harness
 from .presence import is_busy
 from .slots import SlotTable
 from .terminal import Terminal
@@ -83,12 +84,53 @@ def send_keys(keys: list[str]) -> Action:
     return run
 
 
-def launch_agent(split: bool = False) -> Action:
-    """Start the configured agent command.
+def context_key(role: str) -> Action:
+    """Send whatever `role` means inside whatever is running here.
 
-    Without `split`, this refuses to type into a pane that is running a
-    program; a freshly split pane is always an idle shell, so the split path
-    needs no such check.
+    ENTER, X and MIC are one physical key each but three different keystrokes
+    depending on the pane: Ctrl-C interrupts a shell, Escape interrupts an
+    agent without killing it, and voice is Space in Claude but Ctrl-Space in
+    Grok. Resolving that here keeps the harness differences in one table.
+    """
+
+    def run(ctx: Context) -> None:
+        session = ctx.current_session()
+        if session is None:
+            return
+        which = harness.for_command(ctx.tmux.active_command(session))
+        keys = which.send(role)
+        if not keys:
+            log.info("%s does nothing in %s", role, which.label)
+            return
+        log.info("%s -> %s in %s", role, " ".join(keys), which.label)
+        ctx.tmux.send_keys(session, *keys)
+
+    return run
+
+
+def split_pane(below: bool = False) -> Action:
+    """A new plain terminal - no agent typed into it.
+
+    Beside by default because a wide split keeps both readable; below when
+    ENTER is held, which is the one chord on the deck.
+    """
+
+    def run(ctx: Context) -> None:
+        session = ctx.current_session()
+        if session is None:
+            return
+        log.info("split %s %s", session, "below" if below else "beside")
+        ctx.tmux.split_window(session, horizontal=not below)
+
+    return run
+
+
+def launch_agent(split: bool = False) -> Action:
+    """Start the configured agent in the pane you are looking at.
+
+    Never splits: a new terminal is its own gesture now, so starting an agent
+    is "double-tap for a pane, tap to fill it" - two deliberate presses rather
+    than one key that sometimes rearranges your screen.
     """
 
     def run(ctx: Context) -> None:
@@ -96,13 +138,6 @@ def launch_agent(split: bool = False) -> Action:
         if session is None:
             return
         command = ctx.config.launch_command
-
-        if split:
-            if not ctx.tmux.split_window(session, ctx.config.split_horizontal):
-                return
-            log.info("launch %r in split of %s", command, session)
-            ctx.tmux.run_command(session, command)
-            return
 
         running = ctx.tmux.active_command(session)
         if running and command.startswith(running):
@@ -174,6 +209,8 @@ REGISTRY: dict[str, Callable[..., Action]] = {
     "summon": summon,
     "interrupt": interrupt,
     "send_keys": send_keys,
+    "context_key": context_key,
+    "split_pane": split_pane,
     "launch_agent": launch_agent,
     "cancel": cancel,
     "new_window": new_window,

@@ -107,10 +107,10 @@ volatile unsigned long lastHostCommand = 0;
 // Peek: what a held key will do. Unlike a toast it has no timeout - it is on
 // screen exactly as long as the finger is down, so it cannot be missed and
 // cannot linger.
-char sharedPeek[5][22];
+char sharedPeek[6][22];
 volatile int  sharedPeekCount = 0;
 volatile bool peekDirty = false;
-char peekRows[5][22];
+char peekRows[6][22];
 int  peekCount = 0;
 bool peekDrawn = false;
 bool peekWasShown = false;
@@ -138,20 +138,29 @@ void drawPeek() {
   display.clearDisplay();
   drawTitleBar(peekRows[0]);
 
-  // The headline gets the big face when it fits. Ten characters at size 2,
-  // twenty-one at size 1 - so a short session name reads across a desk and a
-  // long one still reads at all, rather than being cropped to fit one size.
-  if (peekCount > 1 && peekRows[1][0]) {
-    bool big = strlen(peekRows[1]) <= 10;
-    display.setTextSize(big ? 2 : 1);
-    display.setCursor(4, big ? 24 : 28);
-    display.print(peekRows[1]);
-  }
+  int rows = peekCount - 1;
+  if (rows < 1) { display.display(); peekDrawn = true; return; }
 
-  if (peekCount > 2 && peekRows[2][0]) {
-    display.setTextSize(1);
-    display.setCursor(4, 52);
-    display.print(peekRows[2]);
+  // Scale to how much there is to say. One or two panes get the big face and
+  // read across a desk; four have to be small to fit at all. The panel is
+  // always full rather than always the same size.
+  bool big = (rows <= 2);
+  int line  = big ? 16 : 11;
+  int top   = 13 + (51 - rows * line) / 2;   // centre the block under the bar
+
+  display.setTextSize(big ? 2 : 1);
+  for (int i = 1; i <= rows; i++) {
+    display.setCursor(2, top + (i - 1) * line);
+    // Size 2 fits 10 characters; cropping here rather than on the host keeps
+    // the host from having to know which size the device picked.
+    if (big) {
+      char cropped[11];
+      strncpy(cropped, peekRows[i], 10);
+      cropped[10] = '\0';
+      display.print(cropped);
+    } else {
+      display.print(peekRows[i]);
+    }
   }
 
   display.display();
@@ -303,7 +312,7 @@ void handleCommand(const String &line) {
     portENTER_CRITICAL(&faceMux);
     sharedPeekCount = 0;
     int start = 0;
-    while (body.length() && sharedPeekCount < 5) {
+    while (body.length() && sharedPeekCount < 6) {
       int bar = body.indexOf('|', start);
       String row = bar < 0 ? body.substring(start) : body.substring(start, bar);
       row.toCharArray(sharedPeek[sharedPeekCount], 22);

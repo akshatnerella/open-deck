@@ -95,19 +95,74 @@ class TestLaunchAgent(unittest.TestCase):
         actions.launch_agent()(ctx)
         self.assertEqual(tmux.calls, [])
 
-    def test_split_launch_bypasses_the_busy_check(self):
-        tmux = FakeTmux(sessions=["fox"], active_command="vim")
-        ctx, _, _ = make_context(tmux=tmux)
-        actions.launch_agent(split=True)(ctx)
-        self.assertEqual(
-            tmux.calls,
-            [("split_window", "fox", True), ("run_command", "fox", "cla")],
-        )
+    def test_launching_never_splits(self):
+        # Tap fills the pane you are in. Making a pane is its own gesture, so
+        # one key can no longer rearrange the screen as a side effect.
+        ctx, tmux, _ = make_context()
+        actions.launch_agent()(ctx)
+        self.assertNotIn("split_window", [c[0] for c in tmux.calls])
 
-    def test_split_direction_follows_config(self):
-        ctx, tmux, _ = make_context(config=Config(launch_command="cla", split_horizontal=False))
-        actions.launch_agent(split=True)(ctx)
-        self.assertIn(("split_window", "fox", False), tmux.calls)
+
+class TestSplitPane(unittest.TestCase):
+    """Double-tap TERM: a new empty terminal, with no agent typed into it."""
+
+    def test_splits_beside_by_default(self):
+        ctx, tmux, _ = make_context()
+        actions.split_pane()(ctx)
+        self.assertEqual(tmux.calls, [("split_window", "fox", True)])
+
+    def test_splits_below_when_asked(self):
+        # The one chord on the deck: hold ENTER, double-tap TERM.
+        ctx, tmux, _ = make_context()
+        actions.split_pane(below=True)(ctx)
+        self.assertEqual(tmux.calls, [("split_window", "fox", False)])
+
+    def test_never_runs_a_command_in_the_new_pane(self):
+        ctx, tmux, _ = make_context()
+        actions.split_pane()(ctx)
+        self.assertNotIn("run_command", [c[0] for c in tmux.calls])
+
+
+class TestContextKey(unittest.TestCase):
+    """One physical key, three meanings, decided by what is in the pane."""
+
+    def _ctx(self, running):
+        return make_context(tmux=FakeTmux(sessions=["fox"], active_command=running))
+
+    def test_cancel_kills_a_shell_but_escapes_an_agent(self):
+        ctx, tmux, _ = self._ctx("zsh")
+        actions.context_key("cancel")(ctx)
+        self.assertIn(("send_keys", "fox", "C-c"), tmux.calls)
+
+        ctx, tmux, _ = self._ctx("2.1.268")
+        actions.context_key("cancel")(ctx)
+        self.assertIn(("send_keys", "fox", "Escape"), tmux.calls)
+
+    def test_voice_differs_between_harnesses(self):
+        ctx, tmux, _ = self._ctx("2.1.268")
+        actions.context_key("voice")(ctx)
+        self.assertIn(("send_keys", "fox", "Space"), tmux.calls)
+
+        ctx, tmux, _ = self._ctx("grok-1.0.30-mac")
+        actions.context_key("voice")(ctx)
+        self.assertIn(("send_keys", "fox", "C-Space"), tmux.calls)
+
+    def test_voice_sends_nothing_in_a_shell(self):
+        # There is no voice mode to toggle; a stray Space would type one.
+        ctx, tmux, _ = self._ctx("zsh")
+        actions.context_key("voice")(ctx)
+        self.assertEqual(tmux.calls, [])
+
+    def test_enter_is_enter_everywhere(self):
+        for running in ("zsh", "2.1.268", "grok-1.0.30-mac"):
+            ctx, tmux, _ = self._ctx(running)
+            actions.context_key("enter")(ctx)
+            self.assertIn(("send_keys", "fox", "Enter"), tmux.calls, running)
+
+    def test_an_unknown_program_is_treated_as_a_shell(self):
+        ctx, tmux, _ = self._ctx("vim")
+        actions.context_key("cancel")(ctx)
+        self.assertIn(("send_keys", "fox", "C-c"), tmux.calls)
 
 
 class TestWindowActions(unittest.TestCase):

@@ -38,13 +38,17 @@ class Binding:
 def default_bindings() -> dict[str, dict[str, Binding]]:
     bindings: dict[str, dict[str, Binding]] = {
         "KEY_TERM": {
+            # Tap fills the pane you are in; double-tap makes a new empty one.
+            # So "I want an agent over there" is double-tap then tap.
             "tap": Binding("launch_agent"),
-            "double": Binding("launch_agent", {"split": True}),
+            "double": Binding("split_pane"),
             "hold": Binding("new_window"),
         },
-        "KEY_MIC": {"tap": Binding("send_keys", {"keys": ["Space"]})},
-        "KEY_CANCEL": {"tap": Binding("cancel")},
-        "KEY_ENTER": {"tap": Binding("send_keys", {"keys": ["Enter"]})},
+        # These three are one key each but three different keystrokes,
+        # depending on what is running in the pane. See harness.py.
+        "KEY_MIC": {"tap": Binding("context_key", {"role": "voice"})},
+        "KEY_CANCEL": {"tap": Binding("context_key", {"role": "cancel"})},
+        "KEY_ENTER": {"tap": Binding("context_key", {"role": "enter"})},
     }
     for slot, key in enumerate(SLOT_KEYS):
         # No "hold" action: holding shows what the key does (see peek.py).

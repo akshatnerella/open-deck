@@ -89,31 +89,25 @@ running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
 
 | Key | Tap | Double-tap | Hold |
 |---|---|---|---|
-| **TERM** | launch the agent here | launch in a split | new window |
-| **MIC** | voice-mode toggle — Space, or `C-Space` on grok | | |
-| **X** | interrupt, or close an idle pane | | |
+| **TERM** | start the agent in this pane | new empty terminal beside | new window |
+| **MIC** | voice mode — the right key for what's running | | |
+| **X** | interrupt — `C-c` in a shell, `Escape` in an agent | | |
 | **ENTER** | Enter | | |
-| **FOX OWL CAT PANDA** | summon that session fullscreen | | peek: what this key does |
-| **Encoder** | step through panes in the current session | | |
+| **FOX OWL CAT PANDA** | go to that session | | list its panes |
+| **Encoder** | step through panes | | |
 
-**Pick your agent CLI** with one setting — `"harness": "grok"` (or `claude`,
-`opencode`, `codex`, `aider`) in `~/.config/opendeck/config.json`. That's all
-it takes; the launch command follows from it.
+**One chord:** hold **ENTER** and double-tap **TERM** to split *below* instead
+of beside.
 
-Detection stays deliberately permissive: a deck set to grok still shows a
-Claude pane as working. The setting decides what a key *launches*, and must
-not make the display lie about what's actually running.
+**Starting an agent somewhere new is two presses:** double-tap TERM for an
+empty pane, then tap TERM to fill it. One key no longer rearranges your screen
+as a side effect of launching something.
 
-**Holding a session key shows what the agent is doing**, by its own name.
-Claude Code reports a session title — `open deck` — which beats anything the
-deck could infer. When there's nothing meaningful, the row stays blank rather
-than showing noise.
-
-**No configuration is required.** The four keys already mean `fox`, `owl`,
-`cat`, `pnda`. If you want a key to mean a project of your own, name it in
-`~/.config/opendeck/config.json` under `sessions` — but the binding stays
-fixed either way. Bindings are resolved by name from a registry, so remapping
-is config, not code.
+**ENTER, X and MIC are the same key with different meanings.** What they send
+depends on what's running in the pane — `C-c` interrupts a shell but `Escape`
+interrupts an agent without killing it, and voice is `Space` in Claude and
+`Ctrl-Space` in grok. In a plain shell, MIC sends nothing at all, because
+there's no voice mode to toggle and a stray space would type one.
 
 Two behaviours worth knowing:
 

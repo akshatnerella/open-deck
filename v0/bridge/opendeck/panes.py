@@ -15,7 +15,7 @@ MAX_ROWS = 5
 LABEL_WIDTH = 13
 EMPTY_ROW = "(empty)"
 
-_AGENT_LABEL = "claude"
+
 
 
 def _sanitise_field(text: str) -> str:
@@ -39,10 +39,10 @@ def pane_label(pane: Pane, window: Window | None) -> str:
         # that it is an agent. The raw command is useless either way, since
         # Claude Code reports its version string as the process name.
         title = harness.clean_title(pane.title or "", pane.command)
-        if title:
-            label = title
-        else:
-            label = pane.command if pane.command.isalpha() else _AGENT_LABEL
+        # Without a session name, fall back to which agent it is rather than
+        # the raw process: "grok-1.0.34-mac" is noise, and a fixed "claude"
+        # would be a lie in a grok pane.
+        label = title or harness.for_command(pane.command).key
     else:
         label = pane.command or "?"
     return _sanitise_field(label)[:LABEL_WIDTH]

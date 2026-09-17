@@ -31,9 +31,26 @@ class Harness:
     command: str
     #: Matched against tmux's pane_current_command.
     patterns: tuple[re.Pattern, ...] = field(default_factory=tuple)
+    #: What ENTER, X and MIC should send inside this program. The same
+    #: physical key has to mean the right thing in a shell, in Claude and in
+    #: Grok - they do not share shortcuts.
+    keys: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def matches(self, command: str) -> bool:
         return any(p.match(command) for p in self.patterns)
+
+    def send(self, role: str) -> tuple[str, ...]:
+        return self.keys.get(role, ())
+
+
+#: A pane with no agent in it. Ctrl-C interrupts, Enter is Enter, and there is
+#: no voice mode to toggle - sending something would be worse than nothing.
+SHELL = Harness(
+    key="shell",
+    label="shell",
+    command="",
+    keys={"enter": ("Enter",), "cancel": ("C-c",), "voice": ()},
+)
 
 
 HARNESSES: dict[str, Harness] = {
@@ -43,6 +60,8 @@ HARNESSES: dict[str, Harness] = {
         command="claude",
         # Claude Code reports its version string as the process name.
         patterns=(re.compile(r"^claude$"), re.compile(r"^\d+(?:\.\d+)+$")),
+        # Escape interrupts without killing the session, unlike Ctrl-C.
+        keys={"enter": ("Enter",), "cancel": ("Escape",), "voice": ("Space",)},
     ),
     "grok": Harness(
         key="grok",
@@ -50,24 +69,28 @@ HARNESSES: dict[str, Harness] = {
         command="grok",
         # Observed as "grok-1.0.30-mac": name, version, platform.
         patterns=(re.compile(r"^grok(?:-.*)?$"),),
+        keys={"enter": ("Enter",), "cancel": ("Escape",), "voice": ("C-Space",)},
     ),
     "opencode": Harness(
         key="opencode",
         label="OpenCode",
         command="opencode",
         patterns=(re.compile(r"^opencode(?:-.*)?$"),),
+        keys={"enter": ("Enter",), "cancel": ("Escape",), "voice": ("Space",)},
     ),
     "codex": Harness(
         key="codex",
         label="Codex",
         command="codex",
         patterns=(re.compile(r"^codex(?:-.*)?$"),),
+        keys={"enter": ("Enter",), "cancel": ("Escape",), "voice": ("Space",)},
     ),
     "aider": Harness(
         key="aider",
         label="Aider",
         command="aider",
         patterns=(re.compile(r"^aider(?:-.*)?$"),),
+        keys={"enter": ("Enter",), "cancel": ("Escape",), "voice": ("Space",)},
     ),
 }
 
@@ -76,6 +99,19 @@ DEFAULT_HARNESS = "claude"
 
 def get(key: str | None) -> Harness:
     return HARNESSES.get((key or "").lower(), HARNESSES[DEFAULT_HARNESS])
+
+
+def for_command(command: str) -> Harness:
+    """Which program is in this pane - so a key can mean the right thing.
+
+    Falls back to SHELL rather than to the configured harness: what matters
+    here is what is actually running, not what the deck would launch.
+    """
+    if command and command not in SHELLS:
+        for h in HARNESSES.values():
+            if h.matches(command):
+                return h
+    return SHELL
 
 
 def is_agent_command(command: str) -> bool:

@@ -38,6 +38,9 @@ class Controller:
         self._transport = transport
         self._tmux = tmux
         self._peeking = False
+        #: Keys physically down right now, so a gesture can be modified by
+        #: another key being held. The only chord: ENTER + double-tap TERM.
+        self._down: set[str] = set()
         self._slots = SlotTable(tmux, config.sessions)
         self._context = Context(tmux=tmux, terminal=terminal, slots=self._slots, config=config)
         self._gestures = GestureRecognizer(
@@ -69,8 +72,15 @@ class Controller:
             log.error("bad binding for %s %s: %s", key, gesture, exc)
             return
         log.info("%s %s -> %s", key, gesture, binding.action)
+        args = dict(binding.args)
+        # Holding ENTER turns a new pane sideways-into-downwards. Resolved
+        # here rather than in the action, so the action stays a plain verb.
+        if binding.action == "split_pane" and "KEY_ENTER" in self._down:
+            args["below"] = True
+            action = actions.build(binding.action, args)
+
         action(self._context)
-        self._announce(binding.action, binding.args)
+        self._announce(binding.action, args)
 
     def _announce(self, action: str, args: dict) -> None:
         if action == "summon":
@@ -107,14 +117,15 @@ class Controller:
 
     def _show_peek(self, key: str) -> None:
         self._slots.refresh()
-        count = title = None
+        live: list = []
+        windows: list = []
         slot = SLOT_KEYS.index(key) if key in SLOT_KEYS else None
         if slot is not None and self._slots.exists(slot):
-            live = self._tmux.panes(self._slots.session_for(slot))
-            count = len(live)
-            title = harness.session_title(live)
+            session = self._slots.session_for(slot)
+            live = self._tmux.panes(session)
+            windows = self._tmux.windows(session)
         lines = peek.lines_for(key, self._slots, self._config.launch_command,
-                               count, title)
+                               live, windows)
         self._peeking = True
         self._face.show_peek(peek.payload(lines))
 
@@ -143,6 +154,11 @@ class Controller:
         if isinstance(event, KeyEvent):
             # Peek tracks the finger rather than the gesture: shown once the
             # hold registers, taken down the moment the key comes up.
+            if event.edge is Edge.DOWN:
+                self._down.add(event.key)
+            elif event.edge is Edge.UP:
+                self._down.discard(event.key)
+
             if event.edge is Edge.HOLD:
                 self._show_peek(event.key)
             elif event.edge is Edge.UP and self._peeking:
