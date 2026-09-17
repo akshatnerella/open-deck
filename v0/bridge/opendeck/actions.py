@@ -174,6 +174,32 @@ def cancel() -> Action:
     return run
 
 
+def close_pane() -> Action:
+    """Close the pane you are in, the way you would close it yourself.
+
+    `exit` rather than `kill-pane`: it is what a shell expects, it lets the
+    shell clean up, and closing the last pane of a session ends that session -
+    which is tmux's own behaviour and not something the deck should override.
+
+    Refuses while a program is running. Tapping X already interrupts, so the
+    sequence is tap-then-double-tap; a double-tap that could kill a working
+    agent outright is not worth the two keystrokes it saves.
+    """
+
+    def run(ctx: Context) -> None:
+        session = ctx.current_session()
+        if session is None:
+            return
+        running = ctx.tmux.active_command(session)
+        if not ctx.tmux.is_idle_shell(session):
+            log.info("not closing %s: %r is running", session, running)
+            return
+        log.info("closing pane in %s", session)
+        ctx.tmux.run_command(session, "exit")
+
+    return run
+
+
 def new_window() -> Action:
     def run(ctx: Context) -> None:
         session = ctx.current_session()
@@ -211,6 +237,7 @@ REGISTRY: dict[str, Callable[..., Action]] = {
     "send_keys": send_keys,
     "context_key": context_key,
     "split_pane": split_pane,
+    "close_pane": close_pane,
     "launch_agent": launch_agent,
     "cancel": cancel,
     "new_window": new_window,

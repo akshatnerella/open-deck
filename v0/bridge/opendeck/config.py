@@ -47,7 +47,12 @@ def default_bindings() -> dict[str, dict[str, Binding]]:
         # These three are one key each but three different keystrokes,
         # depending on what is running in the pane. See harness.py.
         "KEY_MIC": {"tap": Binding("context_key", {"role": "voice"})},
-        "KEY_CANCEL": {"tap": Binding("context_key", {"role": "cancel"})},
+        "KEY_CANCEL": {
+            "tap": Binding("context_key", {"role": "cancel"}),
+            # Tap interrupts, double-tap closes. So "stop, then get rid of it"
+            # is the same key twice.
+            "double": Binding("close_pane"),
+        },
         "KEY_ENTER": {"tap": Binding("context_key", {"role": "enter"})},
     }
     for slot, key in enumerate(SLOT_KEYS):

@@ -116,6 +116,11 @@ class Controller:
             self._face.toast(f"{self._config.launch_command} - {where}")
         elif action == "new_window":
             self._face.toast("new window")
+        elif action == "close_pane":
+            session = self._slots.current_session()
+            if session and not self._tmux.is_idle_shell(session):
+                # Say why nothing happened, or the key looks broken.
+                self._face.toast("still running")
 
     def _announce_presence(self, snapshot) -> None:
         if not self._face.apply(snapshot):

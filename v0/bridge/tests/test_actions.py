@@ -229,3 +229,29 @@ class TestCancel(unittest.TestCase):
         ctx, _, _ = make_context(tmux=tmux)
         actions.cancel()(ctx)
         self.assertEqual(tmux.calls, [])
+
+
+class TestClosePane(unittest.TestCase):
+    """Double-tap X: close this pane, the way you would close it yourself."""
+
+    def test_an_idle_shell_is_closed_with_exit(self):
+        tmux = FakeTmux(sessions=["fox"], active_command="zsh")
+        ctx, _, _ = make_context(tmux=tmux)
+        actions.close_pane()(ctx)
+        self.assertIn(("run_command", "fox", "exit"), tmux.calls)
+
+    def test_a_running_program_is_left_alone(self):
+        # Tapping X already interrupts, so the sequence is tap then
+        # double-tap. A double-tap that kills a working agent outright is not
+        # worth the keystroke it saves.
+        for running in ("2.1.268", "grok-1.0.30-mac", "vim"):
+            tmux = FakeTmux(sessions=["fox"], active_command=running)
+            ctx, _, _ = make_context(tmux=tmux)
+            actions.close_pane()(ctx)
+            self.assertEqual(tmux.calls, [], running)
+
+    def test_it_never_kills_the_pane_outright(self):
+        tmux = FakeTmux(sessions=["fox"], active_command="zsh")
+        ctx, _, _ = make_context(tmux=tmux)
+        actions.close_pane()(ctx)
+        self.assertNotIn("kill_pane", [c[0] for c in tmux.calls])

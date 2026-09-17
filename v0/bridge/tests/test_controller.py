@@ -125,9 +125,11 @@ class TestAttentionAnnounce(unittest.TestCase):
 
 class TestGestureScoping(unittest.TestCase):
     def test_only_keys_with_a_double_binding_wait(self):
+        # Waiting costs every tap on that key the double-tap window, so the
+        # set must stay exactly the keys that have a double binding.
         ctrl, _, _ = controller()
         keys = ctrl._gestures.double_tap_keys
-        self.assertEqual(keys, frozenset({"KEY_TERM"}))
+        self.assertEqual(keys, frozenset({"KEY_TERM", "KEY_CANCEL"}))
 
     def test_agent_key_taps_are_not_delayed(self):
         from opendeck.events import Edge, KeyEvent

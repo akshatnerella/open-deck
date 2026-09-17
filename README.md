@@ -91,7 +91,7 @@ running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
 |---|---|---|---|
 | **TERM** | start the agent in this pane | new empty terminal beside | new window |
 | **MIC** | voice mode — the right key for what's running | | |
-| **X** | interrupt — `C-c` in a shell, `Escape` in an agent | | |
+| **X** | interrupt — `C-c` in a shell, `Escape` in an agent | close the pane | |
 | **ENTER** | Enter | | |
 | **FOX OWL CAT PANDA** | go to that session | | list its panes |
 | **Encoder** | browse panes — ENTER goes there | | |
@@ -104,6 +104,13 @@ it's somewhere else.
 
 Stop touching it and the list gives up after a couple of seconds and goes
 back to Pixie. It's a look-and-go tool, not a mode.
+
+**Tap X to stop it, double-tap X to close it.** Closing runs `exit`, so the
+shell cleans up and tmux ends the session if it was the last pane. It refuses
+while something is running — tapping X already interrupts, so the sequence is
+tap then double-tap, and a double-tap that could kill a working agent isn't
+worth the keystroke it saves. You get a `still running` toast rather than
+silence.
 
 **One chord:** hold **ENTER** and double-tap **TERM** to split *below* instead
 of beside.
