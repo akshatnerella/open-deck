@@ -12,176 +12,137 @@ integrating with any of them.
 
 ---
 
-## Why
-
-Running several coding agents at once, the bottleneck isn't typing — it's
-**context switching**. Which project was that in? Which pane is the agent in?
-Did the tests finish?
-
-A dedicated key per project, hit without looking, beats hunting for a window.
-And a small always-on face can show you what's happening in the sessions you
-*aren't* looking at — something your main screen structurally can't, because it
-only shows the thing in front.
-
----
-
-## What it does
-
-**Four keys, four tmux sessions.** Press an animal and that project comes to
-the front, fullscreen, in your terminal. The previous session is detached, not
-killed — everything keeps running.
-
-A key means the same session every time: FOX is `fox`, CAT is `cat`. If it
-doesn't exist yet, pressing the key creates it. Nothing is discovered, nothing
-gets reshuffled, and there is nothing to configure before the deck is useful —
-a physical button whose meaning moves is worse than no button at all.
-
-**Encoder steps through the panes** in whichever session you're in. Splits and
-separate windows alike; a terminal is a terminal.
-
-**The home screen is Pixie, and only Pixie.** She has the whole panel. Status
-for a particular key is a hold away; the resting state is a face, not a
-dashboard.
-
-**Pixie reacts.** The face is driven by tmux state — she looks concerned when
-something wants attention in a session you aren't watching, happy when an
-agent finishes, curious while one works. Brief text toasts narrate what a
-keypress did.
-
-**Turning the dial, or pressing a project key, glances at that session.** The
-face gives way to a pane list — title, position, up to five rows with the
-active one always in view — for about a second, then decays back to Pixie.
-Summon shows the list too, in place of a toast, because naming the
-destination and showing its contents in one shot beats a line of text.
-
-**A live deck never lies about being live.** The daemon pings the display
-every couple of seconds; if that stops, Pixie's eyes close and a `host
-offline` toast appears within about five seconds, rather than leaving a
-stale face on screen.
-
----
-
-## Running it
-
-The deck talks to a small host bridge over USB serial. The bridge has **no
-dependencies** — stdlib only, and it runs on the Python that ships with macOS:
-
-```bash
-./open-deck                  # that is the whole install
-./scripts/autostart install  # or have it start at login
-```
-
-**The deck is not a keyboard and never types.** It sends events; the bridge
-decides what they mean and drives tmux with `send-keys`, which names the pane
-it is talking to. A keyboard cannot do that — it can only type into whatever
-happens to have focus. That difference is the product, so it is worth being
-plain about the trade: the deck does nothing at all until the bridge is
-running. See [docs/decisions/no-hid.md](docs/decisions/no-hid.md).
-
----
-
 ## Key map
 
 ```
- TERM   MIC    FOX    PANDA
+ TERM   MIC    FOX    PNDA
  ENTER   X     CAT    OWL
 ```
 
 | Key | Tap | Double-tap | Hold |
 |---|---|---|---|
-| **TERM** | start the agent in this pane | new empty terminal beside | new window |
-| **MIC** | voice mode — the right key for what's running | | |
+| **FOX OWL CAT PNDA** | go to that session — creates it if new | | list its panes |
+| **TERM** | start the agent in this pane | new pane beside | new window |
 | **X** | interrupt — `C-c` in a shell, `Escape` in an agent | close the pane | |
-| **ENTER** | Enter | | |
-| **FOX OWL CAT PANDA** | go to that session | | list its panes |
-| **Encoder** | browse panes — ENTER goes there | | |
-
-**The dial follows you in the session you're in** — your Mac is the preview,
-so you can see what you're picking. Hold an animal and it browses *that*
-session instead, without moving you: a dial shouldn't yank you out of what
-you're reading. **ENTER** goes to the highlighted pane, switching sessions if
-it's somewhere else.
-
-Stop touching it and the list gives up after a couple of seconds and goes
-back to Pixie. It's a look-and-go tool, not a mode.
-
-**Tap X to stop it, double-tap X to close it.** Closing runs `exit`, so the
-shell cleans up and tmux ends the session if it was the last pane. It refuses
-while something is running — tapping X already interrupts, so the sequence is
-tap then double-tap, and a double-tap that could kill a working agent isn't
-worth the keystroke it saves. You get a `still running` toast rather than
-silence.
+| **ENTER** | Enter — or go to the highlighted pane | | |
+| **Encoder** | move through panes | | |
 
 **One chord:** hold **ENTER** and double-tap **TERM** to split *below* instead
 of beside.
 
+Three behaviours worth knowing:
+
+**ENTER, X and MIC change meaning with the pane.** `C-c` interrupts a shell but
+`Escape` interrupts an agent without killing it; voice is `Space` in Claude and
+`Ctrl-Space` in grok. In a plain shell MIC sends nothing at all — there's no
+voice mode to toggle, and a stray space would type one.
+
 **Starting an agent somewhere new is two presses:** double-tap TERM for an
-empty pane, then tap TERM to fill it. One key no longer rearranges your screen
-as a side effect of launching something.
+empty pane, then tap TERM to fill it. One key never rearranges your screen as a
+side effect of launching something.
 
-**ENTER, X and MIC are the same key with different meanings.** What they send
-depends on what's running in the pane — `C-c` interrupts a shell but `Escape`
-interrupts an agent without killing it, and voice is `Space` in Claude and
-`Ctrl-Space` in grok. In a plain shell, MIC sends nothing at all, because
-there's no voice mode to toggle and a stray space would type one.
-
-Two behaviours worth knowing:
-
-**X is context-aware.** Something running → `C-c`. Idle shell → types `exit`,
-closing the pane. (`exit` on a session's last pane ends the session; its key
-then makes a fresh one on next press.)
-
-**TERM won't type into a busy pane.** If the pane is running vim or a build, it
-refuses rather than injecting a command into it. Double-tap splits instead —
-a fresh pane is always safe.
+**Tap X to stop it, double-tap X to close it.** Closing runs `exit`, so the
+shell cleans up and tmux ends the session if it was the last pane. It refuses
+while a program is running and toasts `still running` — tapping X already
+interrupts, so the sequence is tap then double-tap.
 
 ---
 
-## Architecture
+## Setting it up on a Mac
 
-```
-┌──────────────┐  USB serial  ┌────────────────┐    tmux     ┌──────────┐
-│  Open Deck    │─────────────▶│    opendeck     │────────────▶│ sessions │
-│  XIAO ESP32S3 │  EVT / HB    │  (host daemon)  │  + Ghostty  │  panes   │
-│               │◀─────────────│                 │◀────────────│  agents  │
-└──────────────┘ FACE/TOAST/LIST └────────────────┘   polling   └──────────┘
+Nothing to install for the host side: the bridge is **stdlib-only** and runs on
+the Python that ships with macOS.
+
+```bash
+git clone git@github.com:akshatnerella/open-deck.git
+cd open-deck
+./open-deck                    # that's the whole install
 ```
 
-The firmware knows nothing about tmux or any harness — it emits semantic events
-(`EVT KEY_AGENT2 HOLD`) and renders whatever the host pushes back
-(`FACE busy`, a `TOAST`, or a `LIST` of panes). All the knowledge lives in the
-daemon.
+You need **tmux** (`brew install tmux`) and an agent CLI on your `PATH`.
 
-**Everything is derived from tmux**, which already tracks per-window activity
-and bell flags — the "something happened where you aren't looking" signal, free,
-for every harness. No hooks, no `settings.json` edits, no screen scraping.
+To have it start at login:
 
-Keys reach panes with `tmux send-keys`: it hits the right pane **without
-stealing focus** and needs no macOS Accessibility permission.
+```bash
+./scripts/autostart install    # uninstall / status also work
+```
+
+This copies the bridge to `~/Library/Application Support/OpenDeck` rather than
+pointing at your checkout, because macOS blocks launchd agents from reading
+`~/Documents`. Re-run it after pulling. Logs go to `~/Library/Logs/opendeck.log`.
+
+### Flashing the deck
+
+Only needed on a new board, not on a new Mac — the firmware lives on the
+device.
+
+```bash
+arduino-cli core install esp32:esp32 \
+  --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+arduino-cli lib install "Adafruit GFX Library" "Adafruit SH110X"
+
+arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32S3 v0/firmware/open_deck
+arduino-cli upload  --fqbn esp32:esp32:XIAO_ESP32S3 -p /dev/cu.usbmodemXXXX v0/firmware/open_deck
+```
+
+The eye renderer is vendored as `pixie_eyes.h`, so there's no third library to
+install. See the notes at the top of that file for what's patched and why.
+
+> **Using the Arduino IDE instead?** It keeps a *separate* config from
+> `arduino-cli` — same sketchbook, different board packages. Add the Espressif
+> URL under **Settings → Additional boards manager URLs**, then quit and reopen
+> the IDE, or the board won't appear even though it's installed.
+
+> **Only one thing can hold the serial port.** Close the IDE's Serial Monitor
+> before running the bridge, and stop the bridge before flashing.
+
+### Configuration
+
+None required. The four keys already mean `fox`, `owl`, `cat`, `pnda`.
+
+Optional, at `~/.config/opendeck/config.json`:
+
+```json
+{
+  "harness": "grok",
+  "sessions": ["webapp", "api", null, null]
+}
+```
+
+`harness` is one of `claude`, `grok`, `opencode`, `codex`, `aider` — it picks
+the launch command and the right keystrokes for ENTER, X and MIC. Detection
+stays permissive: a deck set to grok still shows a Claude pane as working,
+because the setting decides what a key *launches* and must not make the display
+lie about what's running.
 
 ---
 
-## Versions
+## What it does
 
-| | |
-|---|---|
-| **[v0](v0/)** | Hand-wired breadboard prototype. USB-tethered, off-the-shelf parts. **Built and working.** Start here |
-| **v1** | Custom PCB with the XIAO reflow-mounted via castellated pads, proper diode matrix, piezo buzzer. Not started |
+**A key means the same session every time.** FOX is `fox`, CAT is `cat`. If it
+doesn't exist yet, pressing the key creates it. Nothing is discovered, nothing
+gets reshuffled — a physical button whose meaning moves is worse than no button.
 
-Start with [`v0/README.md`](v0/README.md) and [`v0/BOM.md`](v0/BOM.md).
+**Hold a key to see inside.** The panel lists that session's panes: a mark for
+shell or agent, the active one flagged, and whatever each pane is best called.
+Claude Code reports a session title (`open deck`), which beats anything the deck
+could infer. A plain terminal shows as `zsh` rather than being hidden.
 
----
+**The dial browses.** In the session you're in it follows along — your Mac is
+the preview. Hold an animal and it browses *that* session without moving you; a
+dial shouldn't yank you out of what you're reading. ENTER goes to the
+highlighted pane, switching sessions if it's elsewhere. Stop touching it and the
+list gives up after a couple of seconds and goes back to Pixie. It's a
+look-and-go tool, not a mode.
 
-## Status
+**The home screen is Pixie, and only Pixie.** She has the whole panel. Her
+expression is driven by tmux state — concerned when something wants attention in
+a session you aren't watching, happy when an agent finishes, curious while one
+works.
 
-| | |
-|---|---|
-| Hardware: display, encoder, 8-key matrix | ✅ validated |
-| Firmware: input on core 1, rendering on core 0 | ✅ built |
-| Host daemon: tmux navigation + Pixie | ✅ built, 199 tests |
-| `FACE`/`LIST` protocol, glance layer, offline watchdog | ✅ built, 134 tests, verified on hardware |
-| Grok / OpenCode profiles | ⏳ written, unverified against those harnesses |
-| Custom PCB | 📋 v1 |
+**A live deck never lies about being live.** The bridge pings the display every
+couple of seconds; if that stops, Pixie's eyes close and a `host offline` toast
+appears within about five seconds, rather than leaving a stale face on screen.
 
 ### Attention
 
@@ -194,6 +155,63 @@ flashing is effectively free next to the ~29.5ms cost of a redraw.
 
 A piezo buzzer would still beat any visual signal for catching attention when
 you're looking elsewhere entirely — v1's PCB should populate one.
+
+---
+
+## Architecture
+
+```
+┌───────────────┐  USB serial  ┌─────────────────┐    tmux     ┌──────────┐
+│   Open Deck   │─────────────▶│    opendeck     │────────────▶│ sessions │
+│ XIAO ESP32S3  │  EVT / HB    │  (host bridge)  │  + Ghostty  │  panes   │
+│               │◀─────────────│                 │◀────────────│  agents  │
+└───────────────┘ FACE/TOAST/  └─────────────────┘   polling   └──────────┘
+                  PEEK/LIST
+```
+
+The firmware knows nothing about tmux or any harness — it emits semantic events
+(`EVT KEY_AGENT2 HOLD`) and renders whatever the host pushes back. All the
+knowledge lives in the bridge, where it's testable without hardware.
+
+**Everything is derived from tmux**, which already tracks per-window activity
+and bell flags — the "something happened where you aren't looking" signal, free,
+for every harness. No hooks, no `settings.json` edits, no screen scraping.
+
+Keys reach panes with `tmux send-keys`: it hits the right pane **without
+stealing focus** and needs no macOS Accessibility permission. The deck is
+deliberately **not** a USB keyboard — see
+[docs/decisions/no-hid.md](docs/decisions/no-hid.md) for why that was built
+twice and removed twice.
+
+---
+
+## Versions
+
+| | |
+|---|---|
+| **[v0](v0/)** | Hand-wired breadboard prototype. USB-tethered, off-the-shelf parts. **Built and working.** Start here |
+| **v1** | Custom PCB with the XIAO reflow-mounted via castellated pads, proper diode matrix, piezo buzzer. Not started |
+
+See [`v0/README.md`](v0/README.md) and [`v0/BOM.md`](v0/BOM.md).
+
+---
+
+## Status
+
+| | |
+|---|---|
+| Hardware: display, encoder, 8-key matrix | ✅ validated |
+| Firmware: input on core 1, rendering on core 0 | ✅ built |
+| Host bridge: tmux navigation, peek, Pixie | ✅ built, 228 tests |
+| Claude Code and Grok CLI | ✅ detection and keymaps measured on both |
+| OpenCode / Codex / Aider | ⏳ patterns written, unverified against those CLIs |
+| Custom PCB | 📋 v1 |
+
+Tests run on stock macOS Python with no dependencies:
+
+```bash
+cd v0/bridge && python3 -m unittest discover -s tests
+```
 
 ---
 

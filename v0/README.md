@@ -18,11 +18,11 @@ v0/
 ├── BOM.md                  parts list, wiring, print notes
 ├── firmware/
 │   ├── open_deck/          THE firmware - flash this
+│   │                       (pixie_eyes.h is a vendored, patched RoboEyes)
 │   └── diagnostics/        bring-up sketches (i2c scan, key probe, ...)
 ├── bridge/
-│   ├── opendeck/           host daemon
-│   ├── profiles/           per-harness JSON (claude-code, grok, opencode)
-│   └── tests/              132 offline tests, no hardware needed
+│   ├── opendeck/           host bridge (stdlib only)
+│   └── tests/              228 offline tests, no hardware needed
 ├── cad/
 │   ├── stl/                printable shells + 8 keycaps
 │   └── dxf/                badge icon outlines (for remixing keycaps)
