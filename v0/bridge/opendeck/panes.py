@@ -6,6 +6,7 @@ so the firmware stays a dumb renderer and all of this stays testable here.
 
 from __future__ import annotations
 
+from . import harness
 from .presence import is_agent
 from .tmux import SHELLS, _GENERIC_WINDOW_NAMES, Pane, Window
 
@@ -28,12 +29,20 @@ def _sanitise_line(text: str) -> str:
 
 
 def pane_label(pane: Pane, window: Window | None) -> str:
+    """The best name available for this pane, in descending order of trust."""
     if window is not None and window.name and window.name not in _GENERIC_WINDOW_NAMES:
+        # A name a human typed beats anything we can infer.
         label = window.name
     elif is_agent(pane.command) and pane.command not in SHELLS:
-        # Claude Code reports its version string as the process name, so the
-        # raw command is useless as a label even though it is a real agent.
-        label = pane.command if pane.command.isalpha() else _AGENT_LABEL
+        # The agent's own session title is the next best thing: "open deck"
+        # says what this pane is for, where the generic fallback says only
+        # that it is an agent. The raw command is useless either way, since
+        # Claude Code reports its version string as the process name.
+        title = harness.clean_title(pane.title or "", pane.command)
+        if title:
+            label = title
+        else:
+            label = pane.command if pane.command.isalpha() else _AGENT_LABEL
     else:
         label = pane.command or "?"
     return _sanitise_field(label)[:LABEL_WIDTH]

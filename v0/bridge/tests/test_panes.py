@@ -1,7 +1,8 @@
 import unittest
 
 from fakes import pane, window
-from opendeck.panes import build_list, pane_label
+from opendeck.panes import LABEL_WIDTH, build_list, pane_label
+from opendeck.tmux import Pane, Window
 
 
 class TestPaneLabel(unittest.TestCase):
@@ -179,3 +180,37 @@ class TestAutoRenamedWindows(unittest.TestCase):
         rows = build_list("t", panes, windows).split("|")[1:]
         self.assertIn("deploy", rows[0])
         self.assertIn("deploy", rows[1])
+
+
+class TestAgentSessionTitleAsLabel(unittest.TestCase):
+    """An agent that names its own work should say so in the list."""
+
+    def _pane(self, command="2.1.268", title="", index=1):
+        return Pane(window=1, index=index, command=command,
+                    window_active=True, pane_active=True, title=title)
+
+    def test_the_session_title_beats_the_generic_label(self):
+        label = pane_label(self._pane(title="✳ open deck"), None)
+        self.assertEqual(label, "open_deck")
+
+    def test_falls_back_when_the_title_is_noise(self):
+        # grok titles its pane "grok" while running "grok-1.0.30-mac".
+        label = pane_label(self._pane(command="grok-1.0.30-mac", title="grok"), None)
+        self.assertNotEqual(label, "grok-1.0.30-m")
+        self.assertTrue(label)
+
+    def test_no_title_still_gives_the_generic_agent_label(self):
+        self.assertEqual(pane_label(self._pane(title=""), None), "claude")
+
+    def test_a_human_named_window_still_wins(self):
+        # Someone typed that name; it outranks anything we infer.
+        window = Window(index=1, name="deploy", command="2.1.268",
+                        active=True, activity=False, bell=False)
+        self.assertEqual(pane_label(self._pane(title="✳ open deck"), window), "deploy")
+
+    def test_a_shell_pane_is_unaffected(self):
+        self.assertEqual(pane_label(self._pane(command="zsh", title="whatever"), None), "zsh")
+
+    def test_long_titles_are_cropped_to_the_column(self):
+        label = pane_label(self._pane(title="✳ an extremely long session name"), None)
+        self.assertLessEqual(len(label), LABEL_WIDTH)
