@@ -114,13 +114,6 @@ class TestStrip(unittest.TestCase):
         table.refresh()
         self.assertEqual(table.state_of(0), SlotState.IDLE)
 
-    def test_strip_is_four_characters(self):
-        table = SlotTable(FakeTmux(sessions=["fox", "cat"]))
-        table.refresh()
-        strip = table.strip()
-        self.assertEqual(len(strip), 4)
-        self.assertEqual(strip[1], SlotState.EMPTY)   # owl does not exist
-
 
 class TestCurrentSession(unittest.TestCase):
     def test_prefers_the_attached_session(self):

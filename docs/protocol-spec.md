@@ -42,7 +42,6 @@ FACE <alert|busy|done|calm>
 TOAST <text>
 LIST <title>|<row>|<row>|...
 PEEK <bar>|<headline>|<detail>
-SLOTS <4 chars>
 ```
 
 `FACE` sets Pixie's expression, one of four wire states. The old
@@ -73,24 +72,6 @@ is released, so it tracks the finger. An empty payload clears it.
 Peeking is non-destructive by design. Holding used to interrupt that slot's
 session; a destructive action on the same gesture teaches people not to
 explore, which defeats the point of a self-documenting device.
-
-`SLOTS` carries one status character per key, in slot order — the 2×2 status
-cluster drawn beside Pixie on the home screen. The cluster is 2×2 because the
-animal keys are a 2×2 block; a left-to-right strip would map to nothing the
-hand knows. It carries no labels: the keycaps already say which is which. It is the only message that describes all four
-projects at once, and the only one that is permanently on screen rather than
-decaying back to the face.
-
-| Char | Meaning |
-|---|---|
-| (space) | no session yet — pressing the key creates one |
-| `.` | idle: a shell, nothing running |
-| `@` | working: something is running |
-| `!` | needs you: a bell, or activity where you are not looking |
-
-Sent only when it changes. The device redraws the strip from its own copy every
-frame, so re-sending an identical line costs serial bandwidth that key events
-need and buys nothing.
 
 `LIST` travels as **one line**, never a begin/item/end sequence. A multi-line
 render can be interrupted mid-draw by whatever the host sends next, leaving a

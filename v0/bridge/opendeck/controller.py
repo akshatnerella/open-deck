@@ -71,10 +71,6 @@ class Controller:
         log.info("%s %s -> %s", key, gesture, binding.action)
         action(self._context)
         self._announce(binding.action, binding.args)
-        # Acting changes the fleet, so repaint the strip now rather than
-        # leaving it stale until the next refresh tick.
-        self._slots.refresh()
-        self._face.show_slots(self._slots.strip())
 
     def _announce(self, action: str, args: dict) -> None:
         if action == "summon":
@@ -212,7 +208,6 @@ class Controller:
             if now - last_refresh >= REFRESH_INTERVAL:
                 self._slots.refresh()
                 self._announce_presence(self._presence.evaluate(now))
-                self._face.show_slots(self._slots.strip())
                 self._face.keepalive()
                 last_refresh = now
 

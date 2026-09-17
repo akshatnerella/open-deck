@@ -108,10 +108,6 @@ class SlotTable:
             return SlotState.WORKING
         return SlotState.IDLE
 
-    def strip(self) -> str:
-        """The four status characters the firmware draws."""
-        return "".join(self.state_of(i) for i in range(SLOT_COUNT))
-
     def current_session(self) -> str | None:
         attached = self._tmux.attached_session()
         if attached:

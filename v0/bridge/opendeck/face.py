@@ -16,12 +16,10 @@ class Face:
     def __init__(self, transport: SerialTransport) -> None:
         self._transport = transport
         self._state: State | None = None
-        self._slots: str | None = None
 
     def reset(self) -> None:
         """Forget the pushed state so the next update repaints."""
         self._state = None
-        self._slots = None
 
     def apply(self, snapshot: Snapshot) -> bool:
         """Push the expression, returning True if it changed."""
@@ -56,16 +54,3 @@ class Face:
         """Take the panel down. Sent on release, so it tracks the finger."""
         self._transport.send("PEEK")
 
-    def show_slots(self, codes: str) -> bool:
-        """Push the four slot status characters, if they changed.
-
-        Sent only on change: the strip is redrawn from the device's own copy
-        every frame, so re-sending an identical line buys nothing and costs
-        serial bandwidth the key events need.
-        """
-        if codes == self._slots:
-            return False
-        self._slots = codes
-        self._transport.send(f"SLOTS {codes}")
-        log.debug("slots -> %r", codes)
-        return True

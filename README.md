@@ -39,23 +39,9 @@ a physical button whose meaning moves is worse than no button at all.
 **Encoder steps through the panes** in whichever session you're in. Splits and
 separate windows alike; a terminal is a terminal.
 
-**A 2×2 cluster beside Pixie shows all four at a glance** — laid out the way
-your fingers are, so the top-left cell is the top-left key. No labels: the
-keycaps already say which is which.
-
-| Cell | Meaning |
-|---|---|
-| corners only | no session yet |
-| outline | idle — a shell, nothing running |
-| filled, breathing | working |
-| solid with a blinking ring | needs you |
-
-Pixie's face is the same information at lower resolution: she tells you
-*whether* anything wants you, the strip tells you *which*.
-
-**Hold any key to see what it does.** The panel shows the key, the state of
-its session, and what tap does — so there is nothing to memorise and no manual
-to lose. Holding changes nothing; that is what makes it safe to explore.
+**The home screen is Pixie, and only Pixie.** She has the whole panel. Status
+for a particular key is a hold away; the resting state is a face, not a
+dashboard.
 
 **Pixie reacts.** The face is driven by tmux state — she looks concerned when
 something wants attention in a session you aren't watching, happy when an

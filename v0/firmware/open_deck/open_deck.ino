@@ -15,7 +15,6 @@
 //   TOAST <text>
 //   LIST <title>|<row>|...
 //   PEEK <row>|<row>|...   (empty payload clears it)
-//   SLOTS <4 chars>   ' '=empty  '.'=idle  '@'=working  '!'=needs you  '*'=done
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -116,20 +115,6 @@ int  peekCount = 0;
 bool peekDrawn = false;
 bool peekWasShown = false;
 
-const char *SLOT_LABELS[4] = { "FOX", "OWL", "CAT", "PNDA" };
-// The face gets the left of the panel; the status cluster gets a column on the
-// right. The cluster is 2x2 because the four animal keys are a 2x2 block - a
-// left-to-right strip would map to nothing the hand knows.
-const uint8_t FACE_W    = 94;
-const uint8_t CELL_X[4] = { 100, 115, 100, 115 };
-const uint8_t CELL_Y[4] = {  16,  16,  36,  36 };
-
-// Grid position -> slot index. The keys read FOX PNDA / CAT OWL, but the slots
-// are numbered FOX OWL CAT PNDA, so the two orders differ.
-const uint8_t CELL_SLOT[4] = { 0, 3, 2, 1 };
-const uint8_t CELL_SIZE = 13;
-volatile char sharedSlots[4] = { ' ', ' ', ' ', ' ' };
-char slotStatus[4]           = { ' ', ' ', ' ', ' ' };
 
 const unsigned long OFFLINE_AFTER_MS = 5000;
 const unsigned long BLANK_AFTER_MS   = 15UL * 60 * 1000;
@@ -138,43 +123,6 @@ bool panelBlanked = false;
 
 // Drawn into the same framebuffer as the face, immediately before the single
 // flush, so it never blinks.
-// One cell per animal key, laid out the way the keys are. No labels: the
-// keycaps already say which is which, so printing the names again would spend
-// half the pixels repeating the hardware.
-void drawStatusCell(uint8_t gridPos) {
-  uint8_t x = CELL_X[gridPos], y = CELL_Y[gridPos];
-  char st = slotStatus[CELL_SLOT[gridPos]];
-
-  if (st == ' ') {
-    // Not started: corners only. Present, but clearly not running.
-    display.drawPixel(x, y, SH110X_WHITE);
-    display.drawPixel(x + CELL_SIZE - 1, y, SH110X_WHITE);
-    display.drawPixel(x, y + CELL_SIZE - 1, SH110X_WHITE);
-    display.drawPixel(x + CELL_SIZE - 1, y + CELL_SIZE - 1, SH110X_WHITE);
-  } else if (st == '.') {
-    display.drawRect(x, y, CELL_SIZE, CELL_SIZE, SH110X_WHITE);
-  } else if (st == '@') {
-    // Working: a filled core that breathes, so motion carries the meaning
-    // rather than a word.
-    uint8_t pad = 2 + ((millis() / 220) % 3);
-    display.drawRect(x, y, CELL_SIZE, CELL_SIZE, SH110X_WHITE);
-    display.fillRect(x + pad, y + pad, CELL_SIZE - 2 * pad, CELL_SIZE - 2 * pad,
-                     SH110X_WHITE);
-  } else {
-    // Wants you: solid, with a ring that blinks. The only cell that moves
-    // enough to catch peripheral vision.
-    display.fillRect(x, y, CELL_SIZE, CELL_SIZE, SH110X_WHITE);
-    if ((millis() / 350) % 2 == 0) {
-      display.drawRect(x - 2, y - 2, CELL_SIZE + 4, CELL_SIZE + 4, SH110X_WHITE);
-    }
-  }
-}
-
-void drawStatusCluster() {
-  display.drawFastVLine(FACE_W + 2, 6, 52, SH110X_WHITE);
-  for (uint8_t i = 0; i < 4; i++) drawStatusCell(i);
-}
-
 // An inverted bar is the strongest, cheapest hierarchy device a one-bit panel
 // has: it separates "what this is" from "what it says" without a second font.
 void drawTitleBar(const char *text) {
@@ -365,13 +313,6 @@ void handleCommand(const String &line) {
     }
     peekDirty = true;
     portEXIT_CRITICAL(&faceMux);
-  } else if (cmd == "SLOTS") {
-    String codes = nextToken(line, pos);
-    portENTER_CRITICAL(&faceMux);
-    for (uint8_t i = 0; i < 4; i++) {
-      sharedSlots[i] = i < codes.length() ? codes[i] : ' ';
-    }
-    portEXIT_CRITICAL(&faceMux);
   } else if (cmd == "LIST") {
     while (pos < (int)line.length() && line[pos] == ' ') pos++;
     showList(line.substring(pos));
@@ -449,7 +390,7 @@ void setup() {
     while (1) delay(1000);
   }
 
-  eyes.begin(FACE_W, 64, 50);
+  eyes.begin(128, 64, 50);
   eyes.setWidth(34, 34);
   eyes.setHeight(34, 34);
   eyes.setBorderradius(10, 10);
@@ -578,13 +519,8 @@ void renderTask(void *) {
         display.clearDisplay();
         eyes.open();
       }
-      if (eyes.update()) {
-        portENTER_CRITICAL(&faceMux);
-        for (uint8_t i = 0; i < 4; i++) slotStatus[i] = sharedSlots[i];
-        portEXIT_CRITICAL(&faceMux);
-        drawStatusCluster();
-        display.display();
-      }
+      // Home is the face and nothing else.
+      if (eyes.update()) display.display();
       vTaskDelay(1);
     }
   }
