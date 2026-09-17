@@ -14,9 +14,10 @@ from __future__ import annotations
 from .config import SLOT_KEYS
 from .slots import SlotState, SlotTable
 
-#: The panel is 21 characters wide at text size 1.
+#: 21 characters at size 1; the headline gets size 2 when it fits in 10.
 WIDTH = 21
-MAX_LINES = 5
+HEADLINE_BIG = 10
+MAX_LINES = 3
 
 _STATE_WORDS = {
     SlotState.EMPTY: "not started",
@@ -32,52 +33,48 @@ def _fit(text: str) -> str:
 
 def _slot_lines(slot: int, slots: SlotTable, panes: int | None,
                 title: str | None = None) -> list[str]:
+    """Three rows: what this key is, the headline, the detail."""
     session = slots.session_for(slot) or "?"
     state = slots.state_of(slot)
-
-    lines = [_fit(f"{slots.label(slot)}  {session}")]
+    bar = f"{slots.label(slot)}  {session}"
 
     if state is SlotState.EMPTY:
-        # The most important thing a beginner can learn from this device: an
-        # unused key is not a broken key.
-        lines.append(_fit("not started yet"))
-        lines.append("")
-        lines.append(_fit("tap  create + open"))
-    else:
-        detail = _STATE_WORDS[state]
-        if panes:
-            detail += f"  {panes} pane" + ("s" if panes != 1 else "")
-        lines.append(_fit(detail))
-        # The agent names its own work far better than we can ("open deck"
-        # beats "2 panes"), so give it the row when it has something to say.
-        lines.append(_fit(title) if title else "")
-        lines.append(_fit("tap  go there"))
-    return lines
+        # The one place guidance is still news: an unused key is not a broken
+        # key. Everywhere else the instruction is noise after the first week.
+        return [_fit(bar), _fit("not started"), _fit("press to open")]
+
+    # The agent's own name for its work is the headline; it beats anything we
+    # can infer. Without one, the state takes the big slot instead of leaving
+    # the screen's focal point empty.
+    headline = title or _STATE_WORDS[state]
+    detail = _STATE_WORDS[state] if title else ""
+    if panes:
+        detail = f"{detail}  {panes} pane" + ("s" if panes != 1 else "") if detail \
+            else f"{panes} pane" + ("s" if panes != 1 else "")
+    return [_fit(bar), _fit(headline), _fit(detail)]
 
 
 def _key_lines(key: str, launch_command: str) -> list[str]:
     if key == "KEY_TERM":
-        return [
-            "TERM",
-            _fit(f"tap  {launch_command} here"),
-            _fit(f"2x   {launch_command} in a split"),
-            _fit("hold new window"),
-        ]
+        # Tap is implied by the headline naming the command, so the detail
+        # row spends its 21 characters on the two gestures you would not
+        # guess. Exactly 21: "2x split  hold window".
+        return ["TERM", _fit(launch_command), _fit("2x split  hold window")]
     if key == "KEY_MIC":
-        return ["MIC", "", _fit("tap  voice on/off")]
+        return ["MIC", "voice", ""]
     if key == "KEY_CANCEL":
-        return ["X", "", _fit("tap  interrupt here")]
+        return ["X", "interrupt", ""]
     if key == "KEY_ENTER":
-        return ["ENTER", "", _fit("tap  send Enter")]
-    return [key]
+        return ["ENTER", "send", ""]
+    return [key, "", ""]
 
 
 def lines_for(key: str, slots: SlotTable, launch_command: str = "claude",
               panes: int | None = None, title: str | None = None) -> list[str]:
     """The panel shown while `key` is held."""
     if key in SLOT_KEYS:
-        return _slot_lines(SLOT_KEYS.index(key), slots, panes, title)[:MAX_LINES]
-    return _key_lines(key, launch_command)[:MAX_LINES]
+        return _slot_lines(SLOT_KEYS.index(key), slots, panes, title)
+    return _key_lines(key, launch_command)
 
 
 def payload(lines: list[str]) -> str:

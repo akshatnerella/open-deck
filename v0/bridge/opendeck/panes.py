@@ -99,9 +99,11 @@ def build_list(
         # The flag always comes from the real window; only the *name* is
         # suppressed when tmux derived it rather than a human.
         named = window if _is_deliberate(window, commands_by_window.get(pane.window, set())) else None
+        # No pane index: you step through these with the encoder, so the
+        # number is an implementation detail you never type.
         marker = ">" if pane.active else " "
         flag = _flag(window)
-        row = f"{marker}{pane.index:<2}{pane_label(pane, named)}"
+        row = f"{marker} {pane_label(pane, named)}"
         agent = agents.get(pane.target)
         ctx = getattr(agent, "context_pct", 0) if agent else 0
         if ctx >= 70:

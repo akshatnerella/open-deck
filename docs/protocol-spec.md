@@ -41,7 +41,7 @@ window. One physical press yields exactly one action.
 FACE <alert|busy|done|calm>
 TOAST <text>
 LIST <title>|<row>|<row>|...
-PEEK <row>|<row>|...
+PEEK <bar>|<headline>|<detail>
 SLOTS <4 chars>
 ```
 
@@ -59,6 +59,13 @@ just brought into view — a title row plus up to five pane rows — held for
 toast, because naming the destination and showing its contents in one shot is
 strictly more useful than a line of text.
 
+`PEEK` carries three rows with fixed roles, because the device positions each
+by role rather than stacking them: an inverted **bar** naming the key, a
+**headline** the panel is built around, and a small **detail** line. The
+headline is drawn at double size when it fits in 10 characters and normal size
+otherwise, so a short session name reads across a desk and a long one still
+reads at all.
+
 `PEEK` shows what a held key will do, replacing everything else on screen. It
 has no timeout: it goes up when the hold registers and comes down when the key
 is released, so it tracks the finger. An empty payload clears it.
@@ -67,8 +74,10 @@ Peeking is non-destructive by design. Holding used to interrupt that slot's
 session; a destructive action on the same gesture teaches people not to
 explore, which defeats the point of a self-documenting device.
 
-`SLOTS` carries one status character per key, in slot order — the strip drawn
-under Pixie on the home screen. It is the only message that describes all four
+`SLOTS` carries one status character per key, in slot order — the 2×2 status
+cluster drawn beside Pixie on the home screen. The cluster is 2×2 because the
+animal keys are a 2×2 block; a left-to-right strip would map to nothing the
+hand knows. It carries no labels: the keycaps already say which is which. It is the only message that describes all four
 projects at once, and the only one that is permanently on screen rather than
 decaying back to the face.
 

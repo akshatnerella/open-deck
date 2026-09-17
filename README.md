@@ -39,16 +39,16 @@ a physical button whose meaning moves is worse than no button at all.
 **Encoder steps through the panes** in whichever session you're in. Splits and
 separate windows alike; a terminal is a terminal.
 
-**The strip shows all four at a glance.** A row under Pixie carries one mark
-per key, so you can read the whole fleet from across a desk without focusing
-your eyes:
+**A 2×2 cluster beside Pixie shows all four at a glance** — laid out the way
+your fingers are, so the top-left cell is the top-left key. No labels: the
+keycaps already say which is which.
 
-| Mark | Meaning |
+| Cell | Meaning |
 |---|---|
-| (blank) | no session yet |
-| `·` | idle — a shell, nothing running |
-| `▮` | working — something is running |
-| `!` | needs you — a bell, or activity where you aren't looking |
+| corners only | no session yet |
+| outline | idle — a shell, nothing running |
+| filled, breathing | working |
+| solid with a blinking ring | needs you |
 
 Pixie's face is the same information at lower resolution: she tells you
 *whether* anything wants you, the strip tells you *which*.

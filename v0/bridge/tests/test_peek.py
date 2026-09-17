@@ -18,13 +18,13 @@ class TestSlotPeek(unittest.TestCase):
         self.assertIn("FOX", lines[0])
         self.assertIn("fox", lines[0])
 
-    def test_an_unstarted_slot_says_so_and_offers_to_create(self):
+    def test_an_unstarted_slot_says_so_and_says_what_pressing_does(self):
         # The most important thing this panel teaches: an unused key is not a
-        # broken key.
+        # broken key. This is the one screen where guidance is still news.
         lines = peek.lines_for("KEY_AGENT3", table([]))
-        body = " ".join(lines)
+        body = " ".join(lines).lower()
         self.assertIn("not started", body)
-        self.assertIn("create", body)
+        self.assertIn("press", body)
 
     def test_a_live_slot_reports_its_state(self):
         t = FakeTmux(sessions=["fox"])
@@ -42,10 +42,12 @@ class TestSlotPeek(unittest.TestCase):
 
 
 class TestFunctionKeyPeek(unittest.TestCase):
-    def test_term_lists_all_three_gestures(self):
+    def test_term_names_the_gestures_you_would_not_guess(self):
+        # Tap is implied by the headline naming the command; the detail row
+        # is spent on the two that are not obvious.
         lines = peek.lines_for("KEY_TERM", table(), launch_command="grok")
         body = " ".join(lines)
-        for token in ("tap", "2x", "hold"):
+        for token in ("2x", "split", "hold"):
             self.assertIn(token, body)
 
     def test_term_names_the_configured_command(self):
@@ -73,9 +75,11 @@ class TestPanelFits(unittest.TestCase):
             for line in peek.lines_for(key, slots, launch_command="opencode"):
                 self.assertLessEqual(len(line), peek.WIDTH, f"{key}: {line!r}")
 
-    def test_never_more_than_five_rows(self):
-        for key in ("KEY_AGENT1", "KEY_TERM", "KEY_MIC"):
-            self.assertLessEqual(len(peek.lines_for(key, table(["fox"]))), 5)
+    def test_exactly_three_rows(self):
+        # bar / headline / detail. The firmware positions each by role, so a
+        # fourth row would have nowhere to go.
+        for key in ("KEY_AGENT1", "KEY_AGENT2", "KEY_TERM", "KEY_MIC", "KEY_ENTER"):
+            self.assertEqual(len(peek.lines_for(key, table(["fox"]))), 3, key)
 
     def test_a_long_launch_command_is_cropped_not_overflowed(self):
         lines = peek.lines_for("KEY_TERM", table(),

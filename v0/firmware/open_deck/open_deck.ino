@@ -117,7 +117,17 @@ bool peekDrawn = false;
 bool peekWasShown = false;
 
 const char *SLOT_LABELS[4] = { "FOX", "OWL", "CAT", "PNDA" };
-const uint8_t STRIP_TOP    = 52;          // rows 52..63; the face owns 0..51
+// The face gets the left of the panel; the status cluster gets a column on the
+// right. The cluster is 2x2 because the four animal keys are a 2x2 block - a
+// left-to-right strip would map to nothing the hand knows.
+const uint8_t FACE_W    = 94;
+const uint8_t CELL_X[4] = { 100, 115, 100, 115 };
+const uint8_t CELL_Y[4] = {  16,  16,  36,  36 };
+
+// Grid position -> slot index. The keys read FOX PNDA / CAT OWL, but the slots
+// are numbered FOX OWL CAT PNDA, so the two orders differ.
+const uint8_t CELL_SLOT[4] = { 0, 3, 2, 1 };
+const uint8_t CELL_SIZE = 13;
 volatile char sharedSlots[4] = { ' ', ' ', ' ', ' ' };
 char slotStatus[4]           = { ' ', ' ', ' ', ' ' };
 
@@ -128,48 +138,74 @@ bool panelBlanked = false;
 
 // Drawn into the same framebuffer as the face, immediately before the single
 // flush, so it never blinks.
-void drawSlotStrip() {
-  display.drawFastHLine(0, STRIP_TOP - 2, 128, SH110X_WHITE);
+// One cell per animal key, laid out the way the keys are. No labels: the
+// keycaps already say which is which, so printing the names again would spend
+// half the pixels repeating the hardware.
+void drawStatusCell(uint8_t gridPos) {
+  uint8_t x = CELL_X[gridPos], y = CELL_Y[gridPos];
+  char st = slotStatus[CELL_SLOT[gridPos]];
 
-  for (uint8_t i = 0; i < 4; i++) {
-    int16_t x = i * 32;
-    char st = slotStatus[i];
-
-    // An empty slot is drawn dim rather than hidden: a key that does nothing
-    // yet should still look like a key, not a gap.
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
-    display.setCursor(x + 2, STRIP_TOP + 2);
-    display.print(SLOT_LABELS[i]);
-
-    if (st == '@') {
-      // Working: a filled block that grows, so "busy" reads without colour.
-      uint8_t w = 3 + ((millis() / 150) % 4);
-      display.fillRect(x + 24, STRIP_TOP + 3, w, 5, SH110X_WHITE);
-    } else if (st == '!') {
-      display.fillRect(x + 25, STRIP_TOP + 1, 3, 6, SH110X_WHITE);
-      display.fillRect(x + 25, STRIP_TOP + 8, 3, 2, SH110X_WHITE);
-    } else if (st == '*') {
-      display.fillCircle(x + 26, STRIP_TOP + 5, 3, SH110X_WHITE);
-    } else if (st == '.') {
-      display.drawPixel(x + 26, STRIP_TOP + 6, SH110X_WHITE);
-      display.drawPixel(x + 27, STRIP_TOP + 6, SH110X_WHITE);
+  if (st == ' ') {
+    // Not started: corners only. Present, but clearly not running.
+    display.drawPixel(x, y, SH110X_WHITE);
+    display.drawPixel(x + CELL_SIZE - 1, y, SH110X_WHITE);
+    display.drawPixel(x, y + CELL_SIZE - 1, SH110X_WHITE);
+    display.drawPixel(x + CELL_SIZE - 1, y + CELL_SIZE - 1, SH110X_WHITE);
+  } else if (st == '.') {
+    display.drawRect(x, y, CELL_SIZE, CELL_SIZE, SH110X_WHITE);
+  } else if (st == '@') {
+    // Working: a filled core that breathes, so motion carries the meaning
+    // rather than a word.
+    uint8_t pad = 2 + ((millis() / 220) % 3);
+    display.drawRect(x, y, CELL_SIZE, CELL_SIZE, SH110X_WHITE);
+    display.fillRect(x + pad, y + pad, CELL_SIZE - 2 * pad, CELL_SIZE - 2 * pad,
+                     SH110X_WHITE);
+  } else {
+    // Wants you: solid, with a ring that blinks. The only cell that moves
+    // enough to catch peripheral vision.
+    display.fillRect(x, y, CELL_SIZE, CELL_SIZE, SH110X_WHITE);
+    if ((millis() / 350) % 2 == 0) {
+      display.drawRect(x - 2, y - 2, CELL_SIZE + 4, CELL_SIZE + 4, SH110X_WHITE);
     }
   }
 }
 
+void drawStatusCluster() {
+  display.drawFastVLine(FACE_W + 2, 6, 52, SH110X_WHITE);
+  for (uint8_t i = 0; i < 4; i++) drawStatusCell(i);
+}
+
+// An inverted bar is the strongest, cheapest hierarchy device a one-bit panel
+// has: it separates "what this is" from "what it says" without a second font.
+void drawTitleBar(const char *text) {
+  display.fillRect(0, 0, 128, 13, SH110X_WHITE);
+  display.setTextSize(1);
+  display.setTextColor(SH110X_BLACK);
+  display.setCursor(3, 3);
+  display.print(text);
+  display.setTextColor(SH110X_WHITE);
+}
+
 void drawPeek() {
   display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SH110X_WHITE);
+  drawTitleBar(peekRows[0]);
 
-  for (int i = 0; i < peekCount; i++) {
-    display.setCursor(0, i * 11 + 4);
-    display.print(peekRows[i]);
-    // The first row names the key, so underlining it separates the heading
-    // from the actions without spending a whole row on a rule.
-    if (i == 0) display.drawFastHLine(0, i * 11 + 13, 128, SH110X_WHITE);
+  // The headline gets the big face when it fits. Ten characters at size 2,
+  // twenty-one at size 1 - so a short session name reads across a desk and a
+  // long one still reads at all, rather than being cropped to fit one size.
+  if (peekCount > 1 && peekRows[1][0]) {
+    bool big = strlen(peekRows[1]) <= 10;
+    display.setTextSize(big ? 2 : 1);
+    display.setCursor(4, big ? 24 : 28);
+    display.print(peekRows[1]);
   }
+
+  if (peekCount > 2 && peekRows[2][0]) {
+    display.setTextSize(1);
+    display.setCursor(4, 52);
+    display.print(peekRows[2]);
+  }
+
   display.display();
   peekDrawn = true;
 }
@@ -273,24 +309,22 @@ void drawToast() {
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SH110X_WHITE);
-  int width = strlen(toastText) * 6;
+  bool big = strlen(toastText) <= 10;
+  display.setTextSize(big ? 2 : 1);
+  int width = strlen(toastText) * (big ? 12 : 6);
   int x = (128 - width) / 2;
-  display.setCursor(x < 0 ? 0 : x, 28);
+  display.setCursor(x < 0 ? 0 : x, big ? 24 : 28);
   display.print(toastText);
-  display.drawFastHLine(0, 42, 128, SH110X_WHITE);
   display.display();
   toastDrawn = true;
 }
 
 void drawList() {
   display.clearDisplay();
+  drawTitleBar(listRows[0]);
   display.setTextSize(1);
-  display.setTextColor(SH110X_WHITE);
-  display.setCursor(0, 0);
-  display.print(listRows[0]);
-  display.drawFastHLine(0, 10, 128, SH110X_WHITE);
   for (int i = 1; i < listCount; i++) {
-    display.setCursor(0, 3 + i * 10);
+    display.setCursor(4, 6 + i * 11);
     display.print(listRows[i]);
   }
   display.display();
@@ -415,7 +449,7 @@ void setup() {
     while (1) delay(1000);
   }
 
-  eyes.begin(128, STRIP_TOP - 2, 50);
+  eyes.begin(FACE_W, 64, 50);
   eyes.setWidth(34, 34);
   eyes.setHeight(34, 34);
   eyes.setBorderradius(10, 10);
@@ -548,7 +582,7 @@ void renderTask(void *) {
         portENTER_CRITICAL(&faceMux);
         for (uint8_t i = 0; i < 4; i++) slotStatus[i] = sharedSlots[i];
         portEXIT_CRITICAL(&faceMux);
-        drawSlotStrip();
+        drawStatusCluster();
         display.display();
       }
       vTaskDelay(1);
