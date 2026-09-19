@@ -171,21 +171,6 @@ class TestWindowActions(unittest.TestCase):
         actions.new_window()(ctx)
         self.assertEqual(tmux.calls, [("new_window", "fox")])
 
-    def test_cycle_window(self):
-        ctx, tmux, _ = make_context()
-        actions.cycle_window(-1)(ctx)
-        self.assertEqual(tmux.calls, [("cycle_window", "fox", -1)])
-
-    def test_cycle_pane_spans_the_session_by_default(self):
-        ctx, tmux, _ = make_context()
-        actions.cycle_pane(1)(ctx)
-        self.assertEqual(tmux.calls, [("cycle_pane", "fox", 1, True)])
-
-    def test_cycle_pane_can_be_scoped_to_the_current_window(self):
-        ctx, tmux, _ = make_context(config=Config(encoder_scope="window"))
-        actions.cycle_pane(1)(ctx)
-        self.assertEqual(tmux.calls, [("cycle_pane", "fox", 1, False)])
-
 
 class TestRegistry(unittest.TestCase):
     def test_every_default_binding_resolves(self):
@@ -204,31 +189,6 @@ class TestRegistry(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
-
-class TestCancel(unittest.TestCase):
-    """X interrupts what's running, or closes the pane when nothing is."""
-
-    def test_interrupts_a_running_program(self):
-        for program in ("cla", "2.1.261", "vim", "npm"):
-            with self.subTest(program=program):
-                tmux = FakeTmux(sessions=["fox"], active_command=program)
-                ctx, _, _ = make_context(tmux=tmux)
-                actions.cancel()(ctx)
-                self.assertEqual(tmux.calls, [("send_keys", "fox", "C-c")])
-
-    def test_closes_an_idle_pane(self):
-        for shell in ("zsh", "bash", "-zsh"):
-            with self.subTest(shell=shell):
-                tmux = FakeTmux(sessions=["fox"], active_command=shell)
-                ctx, _, _ = make_context(tmux=tmux)
-                actions.cancel()(ctx)
-                self.assertEqual(tmux.calls, [("run_command", "fox", "exit")])
-
-    def test_no_session_is_a_noop(self):
-        tmux = FakeTmux(sessions=[], client=False)
-        ctx, _, _ = make_context(tmux=tmux)
-        actions.cancel()(ctx)
-        self.assertEqual(tmux.calls, [])
 
 
 class TestClosePane(unittest.TestCase):

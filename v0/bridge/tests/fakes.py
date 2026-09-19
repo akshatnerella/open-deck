@@ -62,16 +62,8 @@ class FakeTmux:
         self.calls.append(("new_window", session))
         return True
 
-    def cycle_window(self, session, delta):
-        self.calls.append(("cycle_window", session, delta))
-        return True
-
     def panes(self, session, whole_session=True):
         return list(self._panes.get(session, []))
-
-    def cycle_pane(self, session, delta, whole_session=True):
-        self.calls.append(("cycle_pane", session, delta, whole_session))
-        return True
 
     def active_command(self, session):
         return self._active_command

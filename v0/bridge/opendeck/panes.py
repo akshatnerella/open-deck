@@ -78,16 +78,8 @@ def build_list(
     panes: list[Pane],
     windows: list[Window],
     max_rows: int = MAX_ROWS,
-    agents: dict[str, object] | None = None,
 ) -> str:
-    """Format the pane list.
-
-    `agents` maps a pane target ("window.pane") to an Agent. Where hooks have
-    reported one, its context percentage is appended - the early warning that
-    an agent is about to compact and start forgetting your instructions, which
-    is invisible from tmux alone.
-    """
-    agents = agents or {}
+    """Format the pane list: one row per terminal, active one always visible."""
     by_index = {w.index: w for w in windows}
     commands_by_window: dict[int, set[str]] = {}
     for p in panes:
@@ -104,11 +96,7 @@ def build_list(
         marker = ">" if pane.active else " "
         flag = _flag(window)
         row = f"{marker} {pane_label(pane, named)}"
-        agent = agents.get(pane.target)
-        ctx = getattr(agent, "context_pct", 0) if agent else 0
-        if ctx >= 70:
-            row = f"{row} {ctx}%"
-        elif flag:
+        if flag:
             row = f"{row} {flag}"
         rows.append(row[:DISPLAY_WIDTH])
     if not rows:

@@ -22,7 +22,7 @@ v0/
 │   └── diagnostics/        bring-up sketches (i2c scan, key probe, ...)
 ├── bridge/
 │   ├── opendeck/           host bridge (stdlib only)
-│   └── tests/              228 offline tests, no hardware needed
+│   └── tests/              211 offline tests, no hardware needed
 ├── cad/
 │   ├── stl/                printable shells + 8 keycaps
 │   └── dxf/                badge icon outlines (for remixing keycaps)
@@ -57,7 +57,7 @@ v0/
    ./open-deck --command grok
    ```
 
-No hooks, no `settings.json` edits — everything is read from tmux. Run your
+Everything is read from tmux — no hooks, no `settings.json` edits. Run your
 agents under `tmux` and the deck picks them up automatically.
 
 6. **Optionally run it at login**:
@@ -75,8 +75,7 @@ Optional config at `~/.config/opendeck/config.json`:
 ```json
 {
   "launch_command": "grok",
-  "sessions": ["webapp", "api", null, null],
-  "encoder_scope": "session"
+  "sessions": ["webapp", "api", null, null]
 }
 ```
 

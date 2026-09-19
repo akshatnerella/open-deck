@@ -202,7 +202,7 @@ See [`v0/README.md`](v0/README.md) and [`v0/BOM.md`](v0/BOM.md).
 |---|---|
 | Hardware: display, encoder, 8-key matrix | ✅ validated |
 | Firmware: input on core 1, rendering on core 0 | ✅ built |
-| Host bridge: tmux navigation, peek, Pixie | ✅ built, 228 tests |
+| Host bridge: tmux navigation, peek, Pixie | ✅ built, 211 tests |
 | Claude Code and Grok CLI | ✅ detection and keymaps measured on both |
 | OpenCode / Codex / Aider | ⏳ patterns written, unverified against those CLIs |
 | Custom PCB | 📋 v1 |

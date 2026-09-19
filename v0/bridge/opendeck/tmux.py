@@ -168,14 +168,6 @@ class Tmux:
     def select_window(self, session: str, index: int) -> bool:
         return self._ok("select-window", "-t", f"{session}:{index}")
 
-    def cycle_window(self, session: str, delta: int) -> bool:
-        windows = self.windows(session)
-        if not windows:
-            return False
-        current = next((i for i, w in enumerate(windows) if w.active), 0)
-        target = windows[(current + delta) % len(windows)]
-        return self.select_window(session, target.index)
-
     def panes(self, session: str, whole_session: bool = True) -> list[Pane]:
         scope = ["-s"] if whole_session else []
         result = self._run("list-panes", *scope, "-t", session, "-F", _PANE_FORMAT)
@@ -202,18 +194,6 @@ class Tmux:
             "select-window", "-t", f"{session}:{pane.window}",
             ";", "select-pane", "-t", f"{session}:{pane.target}",
         )
-
-    def cycle_pane(self, session: str, delta: int, whole_session: bool = True) -> bool:
-        """Step through terminals within a session.
-
-        With `whole_session`, panes in every window are reachable; otherwise
-        cycling stays inside the current window.
-        """
-        panes = self.panes(session, whole_session)
-        if len(panes) < 2:
-            return False
-        current = next((i for i, p in enumerate(panes) if p.active), 0)
-        return self.select_pane(session, panes[(current + delta) % len(panes)])
 
     def new_window(self, session: str) -> bool:
         return self._ok("new-window", "-t", session)

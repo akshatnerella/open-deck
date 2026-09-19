@@ -152,26 +152,6 @@ def launch_agent(split: bool = False) -> Action:
     return run
 
 
-def cancel() -> Action:
-    """Interrupt a running program, or close an idle pane.
-
-    Closing the last pane of a session ends that session; tmux behaves this
-    way for a plain `exit` and the deck does not override it.
-    """
-
-    def run(ctx: Context) -> None:
-        session = ctx.current_session()
-        if session is None:
-            return
-        command = ctx.tmux.active_command(session)
-        if is_busy(command):
-            log.info("interrupt %r in %s", command, session)
-            ctx.tmux.send_keys(session, "C-c")
-        else:
-            log.info("closing idle pane in %s", session)
-            ctx.tmux.run_command(session, "exit")
-
-    return run
 
 
 def close_pane() -> Action:
@@ -209,40 +189,21 @@ def new_window() -> Action:
     return run
 
 
-def cycle_window(delta: int) -> Action:
-    def run(ctx: Context) -> None:
-        session = ctx.current_session()
-        if session is not None:
-            ctx.tmux.cycle_window(session, delta)
-
-    return run
 
 
-def cycle_pane(delta: int) -> Action:
-    """Step through terminals, honouring the configured encoder scope."""
-
-    def run(ctx: Context) -> None:
-        session = ctx.current_session()
-        if session is not None:
-            ctx.tmux.cycle_pane(
-                session, delta, whole_session=ctx.config.encoder_scope == "session"
-            )
-
-    return run
 
 
 REGISTRY: dict[str, Callable[..., Action]] = {
     "summon": summon,
-    "interrupt": interrupt,
+    # Not bound by default. Kept because they are the only way to reach a
+    # session you are not in, and to send an arbitrary key, from config.json.
     "send_keys": send_keys,
+    "interrupt": interrupt,
     "context_key": context_key,
     "split_pane": split_pane,
     "close_pane": close_pane,
     "launch_agent": launch_agent,
-    "cancel": cancel,
     "new_window": new_window,
-    "cycle_window": cycle_window,
-    "cycle_pane": cycle_pane,
 }
 
 

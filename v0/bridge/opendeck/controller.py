@@ -7,8 +7,6 @@ import queue
 import time
 
 from . import actions, harness, panes, peek
-from .agents import AgentRegistry
-from .hookserver import DEFAULT_PORT, HookServer
 from .actions import Context
 from .config import SLOT_KEYS, Config
 from .events import Connected, Disconnected, Edge, EncoderEvent, Heartbeat, KeyEvent
@@ -61,11 +59,7 @@ class Controller:
                 key for key, gestures in config.bindings.items() if "double" in gestures
             ),
         )
-        self._agents = AgentRegistry()
-        self._presence = PresenceMonitor(tmux, self._slots, self._agents)
-        # Bound lazily in run(): constructing a Controller must not claim a
-        # port, or every test that builds one fights for 8787.
-        self._hooks: HookServer | None = None
+        self._presence = PresenceMonitor(tmux, self._slots)
         self._face = Face(transport)
         self._running = False
 
@@ -132,12 +126,6 @@ class Controller:
             name = self._slots.label(slot) if slot is not None else snapshot.attention_session
             self._face.toast(f"{name} wants you")
 
-    def on_hook(self, event: str, payload: dict) -> None:
-        target = payload.get("tmux_target") or ""
-        session = target.split(":")[0] if target else ""
-        self._agents.record(event, target, session, payload)
-        self._dirty = True
-
     def _show_peek(self, key: str) -> None:
         self._slots.refresh()
         live: list = []
@@ -170,12 +158,8 @@ class Controller:
         pane_list = self._context.tmux.panes(session)
         position = next((i + 1 for i, p in enumerate(pane_list) if p.active), 0)
         title = f"{label} {session} {position}/{len(pane_list)}"
-        by_target = {a.target.split(":", 1)[1]: a
-                     for a in self._agents.in_session(session)
-                     if ":" in a.target}
         self._face.show_list(
-            panes.build_list(title, pane_list,
-                             self._context.tmux.windows(session), agents=by_target)
+            panes.build_list(title, pane_list, self._context.tmux.windows(session))
         )
 
     def handle_encoder(self, delta: int) -> None:
@@ -295,9 +279,6 @@ class Controller:
 
     def run(self) -> None:
         self._running = True
-        if self._hooks is None:
-            self._hooks = HookServer(self.on_hook, DEFAULT_PORT)
-            self._hooks.start()
         self._slots.refresh()
         last_refresh = time.monotonic()
 
@@ -333,6 +314,3 @@ class Controller:
 
     def stop(self) -> None:
         self._running = False
-        if self._hooks is not None:
-            self._hooks.stop()
-            self._hooks = None

@@ -76,10 +76,7 @@ class Config:
     serial_port: str | None = None
     terminal: str | None = None
     fullscreen: bool = True
-    split_horizontal: bool = True
     double_tap_window: float = DEFAULT_DOUBLE_TAP_WINDOW
-    #: "session" reaches panes in every window; "window" stays in the current one.
-    encoder_scope: str = "session"
     bindings: dict[str, dict[str, Binding]] = field(default_factory=default_bindings)
 
     def __post_init__(self) -> None:
@@ -107,7 +104,7 @@ class Config:
 
         known = {
             "harness", "launch_command", "serial_port", "terminal", "fullscreen",
-            "split_horizontal", "double_tap_window", "encoder_scope",
+            "double_tap_window",
         }
         kwargs = {k: v for k, v in data.items() if k in known}
         if sessions is not None:
