@@ -21,33 +21,38 @@ def make_context(tmux=None, config=None, terminal=None):
 
 
 class TestSummon(unittest.TestCase):
-    def test_switches_and_focuses_when_a_client_is_attached(self):
+    """One fullscreen terminal, switched between sessions."""
+
+    def test_switches_the_client_and_raises_the_window(self):
         ctx, tmux, terminal = make_context()
         actions.summon(0)(ctx)
         self.assertIn(("switch", "fox"), tmux.calls)
-        self.assertIn(("focus",), terminal.calls)
+        self.assertIn(("focus", "/dev/ttys999"), terminal.calls)
 
-    def test_launches_a_terminal_when_nothing_is_attached(self):
+    def test_never_opens_a_window_when_one_is_attached(self):
+        # The expensive path. A launch plus a Space animation where a client
+        # switch is instant.
+        ctx, _, terminal = make_context()
+        actions.summon(0)(ctx)
+        self.assertNotIn("open_fullscreen", [c[0] for c in terminal.calls])
+
+    def test_opens_one_window_when_nothing_is_attached(self):
         tmux = FakeTmux(sessions=["fox"], client=False)
         ctx, _, terminal = make_context(tmux=tmux)
         actions.summon(0)(ctx)
-        self.assertIn(("launch_attached", "fox"), terminal.calls)
+        self.assertIn(("open_fullscreen", "fox"), terminal.calls)
 
-    def test_empty_slot_creates_a_session_named_after_the_key(self):
-        ctx, tmux, terminal = make_context()
+    def test_creates_the_session_first_when_it_does_not_exist(self):
+        ctx, tmux, _ = make_context()
         actions.summon(3)(ctx)
         self.assertIn(("new_session", "pnda"), tmux.calls)
         self.assertIn(("switch", "pnda"), tmux.calls)
-        self.assertEqual(ctx.slots.session_for(3), "pnda")
 
-    def test_an_existing_session_of_that_name_is_reused_not_duplicated(self):
-        # The fixed binding removes the old name-collision problem entirely:
-        # if a session called "pnda" exists, that IS what PNDA means.
+    def test_an_existing_session_is_not_recreated(self):
         tmux = FakeTmux(sessions=["pnda"])
         ctx, _, _ = make_context(tmux=tmux)
         actions.summon(3)(ctx)
-        self.assertNotIn(("new_session", "pnda"), tmux.calls)
-        self.assertIn(("switch", "pnda"), tmux.calls)
+        self.assertNotIn("new_session", [c[0] for c in tmux.calls])
 
 
 class TestInterrupt(unittest.TestCase):

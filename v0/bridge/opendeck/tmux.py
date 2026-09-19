@@ -152,6 +152,21 @@ class Tmux:
         names = [name for name in result.stdout.splitlines() if name]
         return names[0] if names else None
 
+    def client_tty(self, session: str) -> str | None:
+        """The tty of a client attached to `session`, if any.
+
+        This is the handle onto the terminal window showing that session -
+        the deck walks up from it to find the window to focus.
+        """
+        result = self._run("list-clients", "-F", "#{client_session}\t#{client_tty}")
+        if result.returncode != 0:
+            return None
+        for line in result.stdout.splitlines():
+            name, _, tty = line.partition("\t")
+            if name == session and tty:
+                return tty
+        return None
+
     def has_client(self) -> bool:
         result = self._run("list-clients", "-F", "#{client_name}")
         return result.returncode == 0 and bool(result.stdout.strip())

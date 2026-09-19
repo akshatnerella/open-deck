@@ -48,11 +48,19 @@ def summon(slot: int) -> Action:
             if ctx.slots.create_for(slot) is None:
                 return
         log.info("summon %s (%s)", ctx.slots.label(slot), session)
+
+        # One fullscreen terminal, switched between sessions. Opening a window
+        # per session also works, but costs a launch plus a Space animation
+        # where switching a tmux client is immediate - and the sessions are
+        # running either way, so there is nothing to gain by giving each one
+        # its own window.
         if ctx.tmux.has_client():
             ctx.tmux.switch(session)
-            ctx.terminal.focus()
-        else:
-            ctx.terminal.launch_attached(session)
+            ctx.terminal.focus(ctx.tmux.client_tty(session))
+            return
+
+        # Nothing attached at all: make the one window.
+        ctx.terminal.open_fullscreen(session)
 
     return run
 

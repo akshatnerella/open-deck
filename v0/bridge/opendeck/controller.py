@@ -215,10 +215,14 @@ class Controller:
         session = self._browse_session
         pane = self._browse_panes[self._browse_at]
 
+        # Select the pane first, so the window is already showing the right
+        # one by the time it comes forward.
+        self._tmux.select_pane(session, pane)
+
         if session != self._tmux.attached_session():
             self._tmux.switch(session)
-            self._context.terminal.focus()
-        self._tmux.select_pane(session, pane)
+        self._context.terminal.focus(self._tmux.client_tty(session))
+
         log.info("go to %s:%s", session, pane.target)
 
         self._end_browse()

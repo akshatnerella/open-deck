@@ -27,6 +27,11 @@ class FakeTmux:
     def windows(self, session):
         return list(self._windows.get(session, []))
 
+    def client_tty(self, session):
+        if self._client and self._sessions and self._sessions[0].name == session:
+            return "/dev/ttys999"
+        return None
+
     def attached_session(self):
         return self._sessions[0].name if self._sessions and self._client else None
 
@@ -75,15 +80,16 @@ class FakeTmux:
 
 
 class FakeTerminal:
-    def __init__(self):
+    def __init__(self, window_found=True):
         self.calls: list[tuple] = []
+        self._window_found = window_found
 
-    def focus(self):
-        self.calls.append(("focus",))
-        return True
+    def focus(self, tty=None):
+        self.calls.append(("focus", tty))
+        return self._window_found
 
-    def launch_attached(self, session):
-        self.calls.append(("launch_attached", session))
+    def open_fullscreen(self, session):
+        self.calls.append(("open_fullscreen", session))
         return True
 
 
